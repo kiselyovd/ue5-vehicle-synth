@@ -1,6 +1,9 @@
 #include "SynthCaptureSubsystem.h"
 #include "SynthVehicleAnnotator.h"
 #include "SynthCOCOExporter.h"
+#include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSynthCapture, Log, All);
 
@@ -46,10 +49,59 @@ void USynthCaptureSubsystem::CaptureFrame(int32 FrameId)
         UE_LOG(LogSynthCapture, Error, TEXT("CaptureFrame called without active session."));
         return;
     }
+    if (!Exporter.IsValid())
+    {
+        return;
+    }
 
-    // Phase 0: single camera path filled in by Task 12 (after annotator + projection implemented).
-    // For now this is a stub that increments IDs so we can wire up the test scaffold.
-    UE_LOG(LogSynthCapture, Verbose, TEXT("CaptureFrame %d (stub)"), FrameId);
+    // Phase 0: assume a single PlayerCameraManager-driven camera. RGB write happens
+    // via a SceneCaptureComponent2D owned by BP_SceneController; this routine only
+    // writes the keypoint annotations.
+    UWorld* W = GetWorld();
+    if (!W) return;
+
+    APlayerCameraManager* PCM = W->GetFirstPlayerController() ? W->GetFirstPlayerController()->PlayerCameraManager : nullptr;
+    UCameraComponent* Cam = PCM ? PCM->ViewTarget.Target->FindComponentByClass<UCameraComponent>() : nullptr;
+    if (!Cam)
+    {
+        UE_LOG(LogSynthCapture, Warning, TEXT("CaptureFrame: no active CameraComponent found."));
+        return;
+    }
+
+    const FString FileName = FString::Printf(TEXT("rgb/frame_%06d_cam0.png"), FrameId);
+    TMap<FString, FString> Meta;
+    Meta.Add(TEXT("frame_id"), FString::FromInt(FrameId));
+    Meta.Add(TEXT("camera_id"), TEXT("0"));
+    const int32 ImageId = Exporter->AddImage(FileName, ActiveConfig.ImageWidth, ActiveConfig.ImageHeight, Meta);
+
+    for (TWeakObjectPtr<USynthVehicleAnnotator>& Weak : Annotators)
+    {
+        USynthVehicleAnnotator* Ann = Weak.Get();
+        if (!Ann) continue;
+
+        TArray<FCapturedKeypoint> Kpts = Ann->CapturePoints(Cam, ActiveConfig.ImageWidth, ActiveConfig.ImageHeight);
+
+        // Compute bbox from visible keypoints (Phase 0 fallback; better bbox in Phase 1).
+        float MinX = TNumericLimits<float>::Max(), MinY = TNumericLimits<float>::Max();
+        float MaxX = TNumericLimits<float>::Lowest(), MaxY = TNumericLimits<float>::Lowest();
+        bool bAny = false;
+        for (const FCapturedKeypoint& K : Kpts)
+        {
+            if (K.Visibility > 0)
+            {
+                MinX = FMath::Min(MinX, K.ImageX);
+                MinY = FMath::Min(MinY, K.ImageY);
+                MaxX = FMath::Max(MaxX, K.ImageX);
+                MaxY = FMath::Max(MaxY, K.ImageY);
+                bAny = true;
+            }
+        }
+        if (!bAny) continue;
+
+        const FVector4 BBox(MinX, MinY, MaxX - MinX, MaxY - MinY);
+        const float Area = (MaxX - MinX) * (MaxY - MinY);
+        Exporter->AddAnnotation(ImageId, BBox, Kpts, Area);
+    }
 }
 
 void USynthCaptureSubsystem::RegisterAnnotator(USynthVehicleAnnotator* Annotator)
