@@ -1,0 +1,24 @@
+{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "0.1.0",
+    "FriendlyName": "UESynthCapture",
+    "Description": "Synthetic ML dataset capture for vehicles: 24-pt keypoints, multi-pass renders, COCO export.",
+    "Category": "Data",
+    "CreatedBy": "kiselyovd",
+    "CreatedByURL": "https://github.com/kiselyovd",
+    "DocsURL": "https://github.com/kiselyovd/ue5-vehicle-synth",
+    "MarketplaceURL": "",
+    "SupportURL": "https://github.com/kiselyovd/ue5-vehicle-synth/issues",
+    "EngineVersion": "5.7.0",
+    "CanContainContent": true,
+    "IsBetaVersion": true,
+    "Installed": false,
+    "Modules": [
+        {
+            "Name": "UESynthCapture",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        }
+    ]
+}
