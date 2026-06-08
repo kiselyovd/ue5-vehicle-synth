@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install
+      - name: Install deps
+        run: uv sync --all-groups
+      - name: Ruff check
+        run: uv run --all-groups ruff check .
+      - name: Ruff format
+        run: uv run --all-groups ruff format --check .
+      - name: Mypy
+        run: uv run --all-groups mypy src scripts
+      - name: Deptry
+        run: uv run --all-groups deptry .
+      - name: Bandit
+        run: uv run --all-groups bandit -r src scripts -c pyproject.toml
+      - name: Interrogate
+        run: uv run --all-groups interrogate -c pyproject.toml src scripts
+      - name: Pytest
+        run: uv run --all-groups pytest
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 1
+
+  coverage-badge:
+    needs: lint-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-xml
+      - name: Generate shields endpoint JSON
+        run: |
+          python - <<'PY'
+          import json, xml.etree.ElementTree as ET
+          rate = float(ET.parse("coverage.xml").getroot().get("line-rate"))
+          pct = round(rate * 100)
+          if pct >= 90:
+              color = "brightgreen"
+          elif pct >= 75:
+              color = "green"
+          elif pct >= 60:
+              color = "yellowgreen"
+          elif pct >= 40:
+              color = "yellow"
+          elif pct >= 20:
+              color = "orange"
+          else:
+              color = "red"
+          with open("coverage.json", "w") as f:
+              json.dump(
+                  {"schemaVersion": 1, "label": "coverage", "message": f"{pct}%", "color": color},
+                  f,
+              )
+          PY
+      - name: Publish to badges branch (self-bootstrap if missing)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir /tmp/badges
+          cd /tmp/badges
+          git init -q -b badges
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          if git fetch --depth=1 origin badges 2>/dev/null; then
+            git reset --hard origin/badges
+          else
+            echo "Bootstrapping badges branch"
+            printf 'Badge artifacts for shields.io endpoint. Do not edit manually — CI updates this branch.\n' > README.md
+            git add README.md
+          fi
+          cp "$GITHUB_WORKSPACE/coverage.json" coverage.json
+          git add coverage.json
+          if git diff --cached --quiet; then
+            echo "No badge changes"
+            exit 0
+          fi
+          git commit -m "chore(badge): update coverage [skip ci]"
+          git push origin badges
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-check
+          fail_level: error
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: lint-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build training image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: training
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build serving image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: serving
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
