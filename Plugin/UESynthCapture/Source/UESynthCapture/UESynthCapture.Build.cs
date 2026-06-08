@@ -22,5 +22,10 @@ public class UESynthCapture : ModuleRules
             "Slate",
             "SlateCore",
         });
+
+        if (Target.bBuildEditor || Target.bCompileAgainstEditor)
+        {
+            PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "FunctionalTesting" });
+        }
     }
 }
