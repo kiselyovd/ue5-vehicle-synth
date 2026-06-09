@@ -52,7 +52,8 @@ TArray<FCapturedKeypoint> USynthVehicleAnnotator::CapturePoints(UCameraComponent
     Out.SetNum(24);
 
     USkeletalMeshComponent* Mesh = GetMesh();
-    if (!Mesh || !CameraComp || !GetWorld())
+    AActor* Owner = GetOwner();
+    if (!Owner || !CameraComp || !GetWorld())
     {
         return Out;
     }
@@ -83,15 +84,22 @@ TArray<FCapturedKeypoint> USynthVehicleAnnotator::CapturePoints(UCameraComponent
     for (int32 i = 0; i < 24; ++i)
     {
         const FString& SchemaName = SchemaOrder[i];
-        const FName* SocketName = SocketBySchemaName.Find(SchemaName);
-        if (!SocketName || !Mesh->DoesSocketExist(*SocketName))
+        FVector WorldP;
+        if (const FVector* LocalP = LocalPointBySchemaName.Find(SchemaName))
         {
-            // socket not configured; visibility 0
-            continue;
+            // explicit actor-local point (composite static-mesh vehicles)
+            WorldP = Owner->GetActorTransform().TransformPosition(*LocalP);
         }
-
-        const FTransform SocketWorldXform = Mesh->GetSocketTransform(*SocketName, RTS_World);
-        const FVector WorldP = SocketWorldXform.GetLocation();
+        else
+        {
+            const FName* SocketName = SocketBySchemaName.Find(SchemaName);
+            if (!Mesh || !SocketName || !Mesh->DoesSocketExist(*SocketName))
+            {
+                // not configured; visibility 0
+                continue;
+            }
+            WorldP = Mesh->GetSocketTransform(*SocketName, RTS_World).GetLocation();
+        }
 
         // Transform to camera local space
         const FVector CamLocalP = CamXform.InverseTransformPosition(WorldP);
@@ -117,17 +125,19 @@ TArray<FCapturedKeypoint> USynthVehicleAnnotator::CapturePoints(UCameraComponent
         Out[i].ImageX = PixelX;
         Out[i].ImageY = PixelY;
 
-        // Occlusion ray-cast: from camera to world point, see if anything except this vehicle blocks
+        // Occlusion ray-cast from camera to the point. The vehicle itself is NOT
+        // ignored: CarFusion semantics count self-occlusion (far-side wheel behind
+        // the body) as v=1. The 40cm tolerance keeps interior anchor points (wheel
+        // centers ~34cm inside the tire) "visible" when their surface faces the camera.
         FHitResult Hit;
-        FCollisionQueryParams Params;
-        Params.AddIgnoredActor(GetOwner());
+        FCollisionQueryParams Params(SCENE_QUERY_STAT(SynthKeypointVis), /*bTraceComplex*/ true);
         const bool bBlocked = GetWorld()->LineTraceSingleByChannel(
             Hit, CamLoc, WorldP, ECC_Visibility, Params);
 
         const float DistToBlocker = bBlocked ? (Hit.ImpactPoint - CamLoc).Size() : TNumericLimits<float>::Max();
         const float DistToPoint = (WorldP - CamLoc).Size();
 
-        if (!bBlocked || DistToBlocker > DistToPoint - 5.0f)
+        if (!bBlocked || DistToBlocker > DistToPoint - 40.0f)
         {
             Out[i].Visibility = 2;  // visible
         }
