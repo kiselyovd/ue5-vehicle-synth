@@ -7,6 +7,13 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogSynthCapture, Log, All);
 
+// Constructor and destructor are defined here (not defaulted in the header) so the
+// TUniquePtr<FSynthCOCOExporter> member is destroyed in a translation unit where
+// FSynthCOCOExporter is a complete type. SynthCOCOExporter.h is included above.
+USynthCaptureSubsystem::USynthCaptureSubsystem() = default;
+USynthCaptureSubsystem::~USynthCaptureSubsystem() = default;
+USynthCaptureSubsystem::USynthCaptureSubsystem(FVTableHelper& Helper) : Super(Helper) {}
+
 void USynthCaptureSubsystem::BeginCaptureSession(const FCaptureSessionConfig& Config)
 {
     if (bSessionActive)

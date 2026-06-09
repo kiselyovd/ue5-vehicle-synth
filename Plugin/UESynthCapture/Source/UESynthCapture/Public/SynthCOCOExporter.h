@@ -1,11 +1,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SynthCOCOExporter.generated.h"
 
+USTRUCT(BlueprintType)
 struct FCapturedKeypoint
 {
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UESynth")
     float ImageX = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UESynth")
     float ImageY = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UESynth")
     int32 Visibility = 0;  // 0=not labeled, 1=labeled occluded, 2=visible
 };
 

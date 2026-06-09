@@ -33,6 +33,14 @@ class UESYNTHCAPTURE_API USynthCaptureSubsystem : public UWorldSubsystem
     GENERATED_BODY()
 
 public:
+    USynthCaptureSubsystem();
+    virtual ~USynthCaptureSubsystem();
+
+    // Declared here (and defined in the .cpp) so UHT does not auto-generate the
+    // hot-reload vtable-helper constructor inline in the .gen.cpp, where the
+    // forward-declared FSynthCOCOExporter held by TUniquePtr is still incomplete.
+    USynthCaptureSubsystem(FVTableHelper& Helper);
+
     UFUNCTION(BlueprintCallable, Category = "UESynth")
     void BeginCaptureSession(const FCaptureSessionConfig& Config);
 

@@ -6,7 +6,7 @@
 
 BEGIN_DEFINE_SPEC(FUESynthCaptureSpec,
     "UESynthCapture.ProjectionMath",
-    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 END_DEFINE_SPEC(FUESynthCaptureSpec)
 
 void FUESynthCaptureSpec::Define()
@@ -32,9 +32,11 @@ void FUESynthCaptureSpec::Define()
             const FVector Local = Cam.InverseTransformPosition(P);
 
             TestTrue(TEXT("In front of camera"), Local.X > 0);
-            // y/x and z/x should both be ~0 for on-axis point
-            TestEqual(TEXT("on-axis y/x"), Local.Y / Local.X, 0.0f);
-            TestEqual(TEXT("on-axis z/x"), Local.Z / Local.X, 0.0f);
+            // y/x and z/x should both be ~0 for on-axis point.
+            // FVector components are double (LWC) in UE5, so compare against double
+            // literals to select the double TestEqual overload unambiguously.
+            TestEqual(TEXT("on-axis y/x"), Local.Y / Local.X, 0.0);
+            TestEqual(TEXT("on-axis z/x"), Local.Z / Local.X, 0.0);
         });
     });
 }
