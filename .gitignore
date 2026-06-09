@@ -26,3 +26,20 @@ data/processed/*
 !data/processed/.gitignore
 .env
 .env.local
+
+# Unreal Engine
+UEProject/Binaries/
+UEProject/Build/
+UEProject/DerivedDataCache/
+UEProject/Intermediate/
+UEProject/Saved/
+UEProject/.vs/
+UEProject/*.sln
+UEProject/*.VC.db
+# Plugin copy living inside the host project is build-only; source of truth is Plugin/
+UEProject/Plugins/
+# Transient build log captured during the compile test
+UEProject/build_log.txt
+UEProject/*.vsconfig
+Plugin/*/Binaries/
+Plugin/*/Intermediate/
