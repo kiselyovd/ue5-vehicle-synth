@@ -43,3 +43,6 @@ UEProject/build_log.txt
 UEProject/*.vsconfig
 Plugin/*/Binaries/
 Plugin/*/Intermediate/
+
+# capture outputs (GBs)
+captures/
