@@ -29,6 +29,15 @@ public:
     TMap<FString, FVector> LocalPointBySchemaName;
 
     /**
+     * Occlusion tolerance (cm) along the camera ray. A point reads visible when the
+     * blocking hit lies within this distance of the point. Covers interior anchors
+     * (wheel centers ~34cm inside the tire) and grazing-angle surface hits
+     * (a 2cm-high roof graze stretches to ~47cm along the ray).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UESynth")
+    float VisibilityToleranceCm = 60.0f;
+
+    /**
      * Capture the 24 keypoints projected through CameraComp for one frame.
      * Returns 24 entries; each Visibility is set per occlusion test:
      *   0 = socket missing or fully off-screen / behind camera

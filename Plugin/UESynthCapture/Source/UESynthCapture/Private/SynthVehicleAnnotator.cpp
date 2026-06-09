@@ -137,7 +137,7 @@ TArray<FCapturedKeypoint> USynthVehicleAnnotator::CapturePoints(UCameraComponent
         const float DistToBlocker = bBlocked ? (Hit.ImpactPoint - CamLoc).Size() : TNumericLimits<float>::Max();
         const float DistToPoint = (WorldP - CamLoc).Size();
 
-        if (!bBlocked || DistToBlocker > DistToPoint - 40.0f)
+        if (!bBlocked || DistToBlocker > DistToPoint - VisibilityToleranceCm)
         {
             Out[i].Visibility = 2;  // visible
         }
