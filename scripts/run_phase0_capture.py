@@ -17,7 +17,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--ue-editor",
-        default=r"C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe",
+        default=r"C:\Program Files\Epic Games\UE_5.6\Engine\Binaries\Win64\UnrealEditor-Cmd.exe",
         help="Path to UnrealEditor-Cmd.exe",
     )
     parser.add_argument(
