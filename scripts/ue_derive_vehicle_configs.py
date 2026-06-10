@@ -137,9 +137,16 @@ def _clip_warn(
 
 
 def _derive_keypoints(
-    bones: dict[str, list[float]], type_id: str
+    bones: dict[str, list[float]],
+    type_id: str,
+    bounds_top_z: float | None = None,
+    bounds_center_x: float = 0.0,
 ) -> tuple[dict[str, list[float]], list[str], list[str]]:
     """Derive all 24 keypoints from bone positions.
+
+    bounds_top_z: mesh-bounds top in actor space - the roof anchor when the
+    `roof` bone is missing (buses/trucks/vans are far taller than the sedan
+    fallback constant, which poisons every roof-relative point).
 
     Returns (keypoints_dict, bones_used, warnings).
     """
@@ -216,8 +223,13 @@ def _derive_keypoints(
     # --- Roof ---
     roof = _find_bone(bones, "roof", "Roof")
     if roof is None:
-        roof = [-52.7, 0.0, 148.5]
-        warnings.append("roof: using vehicle13 fallback")
+        if bounds_top_z is not None and bounds_top_z > 60.0:
+            # anchor on the real mesh top: roof plane sits just under the bounds top
+            roof = [bounds_center_x, 0.0, 0.97 * bounds_top_z]
+            warnings.append("roof: derived from mesh bounds top")
+        else:
+            roof = [-52.7, 0.0, 148.5]
+            warnings.append("roof: using vehicle13 fallback")
 
     # --- Mirror bones ---
     mir_l = _find_bone(bones, "side_view_mirror_body_l", "mirror_l", "Mirror_L")
@@ -340,16 +352,23 @@ def _process_type(
     world: Any,
 ) -> dict:
     """Load mesh onto actor, read bones, derive config. Return config dict."""
-    asset_path = str(asset_data.object_path)
+    # UE 5.6: AssetData.object_path is gone - load via package_name
+    asset_path = str(asset_data.package_name)
     mesh = unreal.load_asset(asset_path)
     comp = actor.skeletal_mesh_component
     comp.set_skinned_asset_and_update(mesh)
-
-    # Force update so bone transforms are valid
-    comp.update_component_to_world()
-
+    # bone transforms are valid right after set_skinned_asset_and_update on a
+    # spawned (registered) actor - no extra force-update call exists/is needed
     bones = _get_bones(comp)
-    kpts, bones_used, warnings = _derive_keypoints(bones, type_id)
+    # actor-space bounds top = roof anchor for roof-bone-less types (bus/truck/van)
+    b_origin, b_extent = actor.get_actor_bounds(False)
+    actor_z = actor.get_actor_location().z
+    actor_x = actor.get_actor_location().x
+    bounds_top_z = (b_origin.z + b_extent.z) - actor_z
+    bounds_center_x = b_origin.x - actor_x
+    kpts, bones_used, warnings = _derive_keypoints(
+        bones, type_id, bounds_top_z=bounds_top_z, bounds_center_x=bounds_center_x
+    )
 
     return {
         "vehicle_id": f"citysample_{type_id}",
@@ -395,7 +414,9 @@ def derive_all(limit: int | None = None, start: int = 0) -> str:
     errors = []
 
     for type_id, asset_data in slice_:
-        if type_id == SKIP_TYPE:
+        # vehicle13 is hand-tuned; trailers are not cars (no wheel bones, wrong
+        # semantics for a CarFusion-style vehicle category)
+        if type_id == SKIP_TYPE or "trailer" in type_id.lower():
             skipped.append(type_id)
             continue
         out_path = os.path.join(CONFIGS_DIR, f"citysample_{type_id}.json")
