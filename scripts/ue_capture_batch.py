@@ -29,63 +29,75 @@ from typing import Any
 import unreal  # editor-only, not resolvable outside the editor
 
 CONFIG = "D:/Projects/GitHub/ue5-vehicle-synth/configs/vehicles/citysample_vehCar_vehicle13.json"
-OUT_DIR = "D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0"
+OUT_DIR = "D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0_v2"
 IMG_W, IMG_H = 1280, 720
 FOV = 90.0
 EXPOSURE_EV = 8.0
 VENUE = unreal.Vector(6300, -700, 59.4)  # street spot, real road z
 
-# Module-level cache for discovered world vehicles (populated on first call)
-_WORLD_VEHICLE_CACHE: list[tuple[Any, str, str]] | None = None  # (actor, type_id, config_path)
+# Module-level cache for discovered world vehicle INSTANCES (populated on first call)
+# City Sample parks cars as InstancedStaticMesh instances on manager actors
+# (PARKING_CARS_*/CARS_*), one full-body SM_veh<Type> mesh per instance - they
+# are NOT separate actors. Each entry: (type_id, config_path, (x,y,z), (roll,pitch,yaw)).
+_WORLD_VEHICLE_CACHE: list[tuple[str, str, tuple, tuple]] | None = None
 
 _VENUE_RADIUS_CM = 3000.0
 
-
-def _type_id_from_mesh_path(mesh_path: str) -> str | None:
-    """Extract type_id from a mesh path like /Game/Vehicle/vehCar_vehicle05/Mesh/SM_..."""
-    m = re.search(r"/Game/Vehicle/([^/]+)/", mesh_path)
-    return m.group(1) if m else None
+# main body mesh only (not SM_All_Trans_* glass, SM_Wheel_*, SM_Door_*, proxies)
+_BODY_MESH_RE = re.compile(r"^SM_(veh[A-Za-z]+_vehicle\d+)$")
 
 
-def discover_world_vehicles(radius_cm: float = _VENUE_RADIUS_CM) -> list[tuple[Any, str, str]]:
-    """Discover City Sample vehicles placed in the world within radius of VENUE.
+def discover_world_vehicles(radius_cm: float = _VENUE_RADIUS_CM) -> list[tuple[str, str, tuple, tuple]]:
+    """Enumerate parked City Sample vehicle ISM instances within radius of VENUE.
 
-    Returns list of (actor, type_id, config_path). Skips our own VKR_/VK_ actors
-    and types without a config file. Caches result for the session.
+    Also flips the body meshes' collision to complex-as-simple (in memory) so
+    visibility traces against parked cars are per-poly accurate.
     """
     global _WORLD_VEHICLE_CACHE
     if _WORLD_VEHICLE_CACHE is not None:
         return _WORLD_VEHICLE_CACHE
 
-    configs_dir = os.path.dirname(CONFIG)  # e.g. .../configs/vehicles
+    configs_dir = os.path.dirname(CONFIG)
     eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     results = []
+    flipped_assets = set()
     for actor in eas.get_all_level_actors():
-        label = actor.get_actor_label()
-        if label.startswith(("VKR_", "VK_")):
+        if actor.get_actor_label().startswith(("VKR_", "VK_")):
             continue
-        loc = actor.get_actor_location()
-        dx = loc.x - VENUE.x
-        dy = loc.y - VENUE.y
-        dz = loc.z - VENUE.z
-        if (dx * dx + dy * dy + dz * dz) > radius_cm**2:
-            continue
-        # Check StaticMeshComponents for /Game/Vehicle/ paths
-        for comp in actor.get_components_by_class(unreal.StaticMeshComponent):
+        for comp in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
             sm = comp.get_editor_property("static_mesh")
             if sm is None:
                 continue
-            mesh_path = sm.get_path_name()
-            if "/Game/Vehicle/" not in mesh_path:
+            m = _BODY_MESH_RE.match(sm.get_name())
+            if not m:
                 continue
-            type_id = _type_id_from_mesh_path(mesh_path)
-            if type_id is None:
-                continue
+            type_id = m.group(1)
             config_path = os.path.join(configs_dir, f"citysample_{type_id}.json")
             if not os.path.exists(config_path):
                 continue
-            results.append((actor, type_id, config_path))
-            break  # one type per actor
+            # per-poly traces for accurate instance visibility
+            if sm.get_path_name() not in flipped_assets:
+                bs = sm.get_editor_property("body_setup")
+                if bs:
+                    bs.set_editor_property(
+                        "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE
+                    )
+                flipped_assets.add(sm.get_path_name())
+            for i in range(comp.get_instance_count()):
+                t = comp.get_instance_transform(i, True)  # world space
+                loc = t.translation
+                dx, dy = loc.x - VENUE.x, loc.y - VENUE.y
+                if (dx * dx + dy * dy) > radius_cm**2:
+                    continue
+                rot = t.rotation.rotator()
+                results.append(
+                    (
+                        type_id,
+                        config_path,
+                        (loc.x, loc.y, loc.z),
+                        (rot.roll, rot.pitch, rot.yaw),
+                    )
+                )
     _WORLD_VEHICLE_CACHE = results
     return results
 
@@ -135,20 +147,36 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
         "local_point_by_schema_name", {k: unreal.Vector(*v) for k, v in cfg["keypoints"].items()}
     )
 
-    # Build annotators for discovered world vehicles (cached per session)
-    world_vehs = discover_world_vehicles()
-    # (annotator, type_id, actor_label, schema_names)
-    world_anns: list[tuple[Any, str, str, list[str]]] = []
-    for wv_actor, wv_type, wv_config_path in world_vehs:
+    # World vehicle instances: one hidden probe actor is teleported into each
+    # ISM instance's transform so the C++ annotator (owner transform + the
+    # bidirectional occlusion traces) is reused verbatim per instance.
+    eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    probe = None
+    for a in eas.get_all_level_actors():
+        if a.get_actor_label() == "VK_InstProbe":
+            probe = a
+            break
+    if probe is None:
+        probe = eas.spawn_actor_from_class(unreal.Actor, unreal.Vector(0, 0, -100000), unreal.Rotator(0, 0, 0))
+        probe.set_actor_label("VK_InstProbe")
+        probe.get_editor_property("root_component").set_editor_property(
+            "mobility", unreal.ComponentMobility.MOVABLE
+        )
+
+    world_insts = discover_world_vehicles()
+    # one annotator per type, all owned by the probe
+    type_anns: dict[str, tuple[Any, list[str]]] = {}
+    for wv_type, wv_config_path, _loc, _rot in world_insts:
+        if wv_type in type_anns:
+            continue
         with open(wv_config_path, encoding="utf-8") as _wv_f:
             wv_cfg = json.load(_wv_f)
-        wv_names = list(wv_cfg["keypoints"].keys())
-        wv_ann = unreal.new_object(unreal.SynthVehicleAnnotator, outer=wv_actor)
+        wv_ann = unreal.new_object(unreal.SynthVehicleAnnotator, outer=probe)
         wv_ann.set_editor_property(
             "local_point_by_schema_name",
             {k: unreal.Vector(*v) for k, v in wv_cfg["keypoints"].items()},
         )
-        world_anns.append((wv_ann, wv_type, wv_actor.get_actor_label(), wv_names))
+        type_anns[wv_type] = (wv_ann, list(wv_cfg["keypoints"].keys()))
 
     os.makedirs(OUT_DIR + "/rgb", exist_ok=True)
     poses = list(pose_iter(n_azim=n_azim))
@@ -163,7 +191,7 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
         blocking = unreal.SystemLibrary.sphere_overlap_actors(
             world, cam_loc, 35.0, [], unreal.Actor, [rig, cam, sc]
         )
-        blocking = [b for b in blocking if not b.get_actor_label().startswith(("VKR_", "VK_"))]
+        blocking = [b for b in (blocking or []) if not b.get_actor_label().startswith(("VKR_", "VK_"))]
         if blocking:
             skipped += 1
             continue
@@ -197,8 +225,17 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
             }
         ]
 
-        # --- World vehicle instances ---
-        for wv_ann, wv_type, wv_label, wv_names in world_anns:
+        # --- World vehicle instances (ISM, via teleported probe) ---
+        for inst_i, (wv_type, _cfgp, wloc, wrot) in enumerate(world_insts):
+            # cheap pre-cull: instance farther than 6000cm from camera can't pass bbox filter
+            ddx, ddy = wloc[0] - cam_loc.x, wloc[1] - cam_loc.y
+            if (ddx * ddx + ddy * ddy) > 6000.0**2:
+                continue
+            probe.set_actor_location(unreal.Vector(*wloc), False, False)
+            probe.set_actor_rotation(
+                unreal.Rotator(roll=wrot[0], pitch=wrot[1], yaw=wrot[2]), False
+            )
+            wv_ann, wv_names = type_anns[wv_type]
             wv_res = wv_ann.capture_points(cam.camera_component, IMG_W, IMG_H)
             wv_kpts = [
                 {
@@ -209,22 +246,18 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
                 }
                 for i in range(24)
             ]
-            # Skip instance if fewer than 2 points visible
             n_vis = sum(1 for k in wv_kpts if k["v"] > 0)
             if n_vis < 2:
                 continue
-            # Skip if bbox < 24px in both dims
             vis_pts = [(k["x"], k["y"]) for k in wv_kpts if k["v"] > 0]
             xs = [p[0] for p in vis_pts]
             ys = [p[1] for p in vis_pts]
-            bw = max(xs) - min(xs)
-            bh = max(ys) - min(ys)
-            if bw < 24 and bh < 24:
+            if (max(xs) - min(xs)) < 24 and (max(ys) - min(ys)) < 24:
                 continue
             instances.append(
                 {
                     "vehicle_type": f"citysample_{wv_type}",
-                    "actor": wv_label,
+                    "actor": f"ism_{wv_type}_{inst_i}",
                     "keypoints": wv_kpts,
                 }
             )
