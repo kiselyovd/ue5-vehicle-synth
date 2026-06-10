@@ -137,14 +137,24 @@ TArray<FCapturedKeypoint> USynthVehicleAnnotator::CapturePoints(UCameraComponent
         const float DistToBlocker = bBlocked ? (Hit.ImpactPoint - CamLoc).Size() : TNumericLimits<float>::Max();
         const float DistToPoint = (WorldP - CamLoc).Size();
 
-        if (!bBlocked || DistToBlocker > DistToPoint - VisibilityToleranceCm)
+        bool bVisible = (!bBlocked || DistToBlocker > DistToPoint - VisibilityToleranceCm);
+
+        // Backface guard: one-sided collision lets the forward ray exit an enclosing
+        // mesh (e.g. a camera placed inside another car) without a hit. The reverse
+        // ray meets that mesh's front faces, so a blocker farther than the tolerance
+        // from the point flips the verdict to occluded.
+        if (bVisible)
         {
-            Out[i].Visibility = 2;  // visible
+            FHitResult BackHit;
+            const bool bBackBlocked = GetWorld()->LineTraceSingleByChannel(
+                BackHit, WorldP, CamLoc, ECC_Visibility, Params);
+            if (bBackBlocked && (BackHit.ImpactPoint - WorldP).Size() > VisibilityToleranceCm)
+            {
+                bVisible = false;
+            }
         }
-        else
-        {
-            Out[i].Visibility = 1;  // labeled but occluded
-        }
+
+        Out[i].Visibility = bVisible ? 2 : 1;
     }
 
     return Out;
