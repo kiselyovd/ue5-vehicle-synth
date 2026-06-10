@@ -45,6 +45,9 @@ repos:
     rev: 0.25.1
     hooks:
       - id: deptry
+        # Install via: uv sync --group dev; run via: uv run deptry .
+        # The pre-commit isolated env cannot find deptry on Windows without uv.
+        stages: [manual]
 
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -68,7 +68,7 @@ def main() -> int:
         "-ExecCmds=ke * SynthCapturePhase0Start",
     ]
     print("Running:", " ".join(cmd))
-    proc = subprocess.run(cmd, check=False)
+    proc = subprocess.run(cmd, check=False)  # nosec B603
     return proc.returncode
 
 

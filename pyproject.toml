@@ -133,4 +133,4 @@ DEP002 = ["nbstripout", "ipykernel", "pyyaml", "rich"]
 
 [tool.codespell]
 skip = "uv.lock,*.ipynb,*.lock,data/*"
-ignore-words-list = "te,nd,fo"
+ignore-words-list = "te,nd,fo,ue,ues"
