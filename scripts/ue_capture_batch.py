@@ -78,10 +78,21 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
     poses = list(pose_iter(n_azim=n_azim))
     end = min(start + count, len(poses))
     lines = []
+    skipped = 0
     for idx in range(start, end):
         ry, off = poses[idx]
         rig.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=ry), False)
         cam_loc = unreal.Vector(VENUE.x + off.x, VENUE.y + off.y, VENUE.z + off.z)
+        # camera clearance: skip poses where the camera sits inside scene geometry
+        # (e.g. inside a parked car - backface culling makes such frames look
+        # "shot from a cabin" while visibility rays pass through unblocked).
+        blocking = unreal.SystemLibrary.sphere_overlap_actors(
+            world, cam_loc, 35.0, [], unreal.Actor, [rig, cam, sc]
+        )
+        blocking = [b for b in blocking if not b.get_actor_label().startswith(("VKR_", "VK_"))]
+        if blocking:
+            skipped += 1
+            continue
         look = unreal.MathLibrary.find_look_at_rotation(
             cam_loc, unreal.Vector(VENUE.x, VENUE.y, VENUE.z + 70.0)
         )
@@ -116,4 +127,4 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
         )
     with open(OUT_DIR + "/captures.jsonl", "a", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-    return f"captured [{start},{end}) of {len(poses)} total poses"
+    return f"captured [{start},{end}) of {len(poses)} total poses (skipped {skipped} blocked-camera poses)"
