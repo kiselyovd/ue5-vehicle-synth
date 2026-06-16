@@ -167,6 +167,11 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     pp.set_editor_property("override_motion_blur_amount", True)
     pp.set_editor_property("motion_blur_amount", 0.0)
     cc.set_editor_property("post_process_settings", pp)
+    if light_name:
+        try:
+            ue_lighting.apply_camera_grade(cc, light_name)
+        except Exception as e:  # grading is best-effort
+            unreal.log_warning(f"camera grade '{light_name}' not applied: {e}")
 
     inst_anns = _instance_annotators(cx, cy) if with_instances else []
 
