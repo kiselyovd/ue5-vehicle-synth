@@ -48,7 +48,7 @@ def teardown():
     eas = _eas()
     for a in eas.get_all_level_actors():
         lbl = a.get_actor_label()
-        if lbl.startswith(("VKR_", "VK_Rig", "VK_Cam", "VK_InstProbe", "VK_SC", "VK_Diag")):
+        if lbl.startswith(("VKR_", "VK_Rig", "VK_Cam", "VK_InstProbe", "VK_SC", "VK_Diag", "VK_Calib")):
             eas.destroy_actor(a)
 
 
@@ -253,6 +253,10 @@ def _instance_annotators(cx, cy, radius=6000.0):
     (probe_actor, annotator, schema_names, instance_transform)."""
     try:
         import ue_capture_batch
+        # discover_world_vehicles filters by the module VENUE global + caches; point
+        # it at this group's venue and force a fresh scan.
+        ue_capture_batch.VENUE = unreal.Vector(cx, cy, 0.0)
+        ue_capture_batch._WORLD_VEHICLE_CACHE = None
         world_insts = ue_capture_batch.discover_world_vehicles(radius_cm=radius)
     except Exception as e:  # discovery is best-effort
         unreal.log_warning(f"instance discovery failed: {e}")
@@ -276,9 +280,29 @@ def _instance_annotators(cx, cy, radius=6000.0):
     return out
 
 
-def render_group(info, group_tag):
+# Render quality presets. "lite" keeps Lumen global illumination but forces it to
+# software tracing and disables hardware ray-tracing effects - much lighter on the
+# GPU (the RTX 3080 hit a D3D12 TDR/device-removed crash under sustained hardware
+# RT). Keypoint training does not need cinematic RT, so "lite" is the default for
+# the bulk dataset. "gold" keeps full hardware ray tracing for hero shots.
+RENDER_PRESETS = {
+    "lite": {
+        "r.MotionBlurQuality": 0.0,
+        "r.Lumen.HardwareRayTracing": 0.0,
+        "r.RayTracing.Shadows": 0.0,
+        "r.RayTracing.Reflections": 0.0,
+        "r.RayTracing.AmbientOcclusion": 0.0,
+    },
+    "gold": {
+        "r.MotionBlurQuality": 0.0,
+    },
+}
+
+
+def render_group(info, group_tag, quality="lite"):
     """Phase B: MRQ-render the keyframed sequence to PNGs (async). Motion blur off,
-    Lumen + RT, 1280x720, named {group_tag}.{frame}.png to match the JSONL."""
+    1280x720, named {group_tag}.{frame}.png to match the JSONL. `quality` selects a
+    RENDER_PRESETS entry ('lite' = Lumen, no hardware RT - default; 'gold' = full RT)."""
     qsub = unreal.get_editor_subsystem(unreal.MoviePipelineQueueSubsystem)
     q = qsub.get_queue()
     for j in list(q.get_jobs()):
@@ -291,7 +315,12 @@ def render_group(info, group_tag):
     c.find_or_add_setting_by_class(unreal.MoviePipelineImageSequenceOutput_PNG)
     c.find_or_add_setting_by_class(unreal.MoviePipelineGameOverrideSetting)
     cv = c.find_or_add_setting_by_class(unreal.MoviePipelineConsoleVariableSetting)
-    cv.add_or_update_console_variable("r.MotionBlurQuality", 0.0)
+    for name, val in RENDER_PRESETS.get(quality, RENDER_PRESETS["lite"]).items():
+        cv.add_or_update_console_variable(name, val)
+    if quality == "lite":
+        aa = c.find_or_add_setting_by_class(unreal.MoviePipelineAntiAliasingSetting)
+        aa.set_editor_property("spatial_sample_count", 1)
+        aa.set_editor_property("temporal_sample_count", 1)
     o = c.find_or_add_setting_by_class(unreal.MoviePipelineOutputSetting)
     o.set_editor_property("output_resolution", unreal.IntPoint(IMG_W, IMG_H))
     o.set_editor_property("output_directory", unreal.DirectoryPath(f"{info['out_dir']}/rgb"))
