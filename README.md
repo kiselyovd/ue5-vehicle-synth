@@ -34,11 +34,11 @@ The pipeline decouples annotation (fast, in-editor) from rendering (gold-path, o
 
 4. **Export.** Per-frame JSONL is converted to a validated multi-instance COCO keypoint dataset, then consumed by the `vehicle-keypoints` training pipeline.
 
-### Projection calibration
+### Keypoint labels on a real vehicle
 
-The projection math is calibrated against the actual render so labels land on pixels. Markers placed across the frame project to within a couple of pixels horizontally of where Movie Render Queue draws them:
+Every vehicle is labeled with the full 24-point schema plus a mesh-bounds bounding box that reaches the tire bottoms like hand annotations. Points are colored by visibility (green visible, yellow self-occluded), and the projection is calibrated against the actual render so the labels land on pixels:
 
-![Projected points overlaid on the render](docs/images/calibration.png)
+![24 keypoints and bounding box projected onto a City Sample vehicle](docs/images/calibration.png)
 
 ## The 24-point schema
 

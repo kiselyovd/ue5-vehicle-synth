@@ -36,11 +36,11 @@ Per-frame JSONL records (one per pose, each carrying every vehicle instance with
 
 ## Calibration
 
-Because the annotation and the render are produced by different systems, the projection math must match what the renderer actually draws. The check places marker spheres spread across the frame, projects them with the same math the keypoint annotator uses, and overlays crosshairs on the rendered image.
+Because the annotation and the render are produced by different systems, the projection math must match what the renderer actually draws. It is first checked with marker spheres spread across the frame, then confirmed on real vehicles during dataset QA - the 24 keypoints and the mesh-bounds bounding box overlaid on an actual rendered car:
 
-![Projected points overlaid on the render; horizontal alignment is pixel-accurate](https://raw.githubusercontent.com/kiselyovd/ue5-vehicle-synth/main/docs/images/calibration.png)
+![24 keypoints and bounding box projected onto a City Sample vehicle; points colored by visibility](https://raw.githubusercontent.com/kiselyovd/ue5-vehicle-synth/main/docs/images/calibration.png)
 
-Horizontal alignment lands within a couple of pixels, confirming the field-of-view model. The render itself uses a plain camera with a directly-set field of view (not a cine camera, whose field of view is derived from sensor and focal length) precisely so that the projection and the render share one unambiguous value. The final alignment check is the keypoint overlay on a real vehicle during dataset QA.
+The labels land on the right anatomy, the box reaches the tire bottoms, and visibility is colored green (visible) / yellow (self-occluded). The render uses a plain camera with a directly-set field of view (not a cine camera, whose field of view is derived from sensor and focal length) precisely so the projection and the render share one unambiguous value.
 
 ## The 24-point schema
 

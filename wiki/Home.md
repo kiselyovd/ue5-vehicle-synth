@@ -8,7 +8,17 @@
 
 ## Pages
 
-- **[Pipeline](Pipeline)** - the full capture-to-COCO walkthrough: road detection, keypoint projection, gold-path render, export, and calibration.
+Practical guides (start here if you want to run it):
+
+- **[Installation](Installation)** - from a clean machine to a working capture environment: UE 5.6, City Sample, the C++ plugin, UnrealMCP, and the Python tooling.
+- **[Generating a Dataset](Generating-a-Dataset)** - the full operational workflow: launch, load the module, define a capture grid, run groups, monitor renders, aggregate to COCO.
+- **[Configuration](Configuration)** - tune what gets captured: vehicle configs and the 24-point schema, venues, lighting presets, render quality, camera orbits, adding a new vehicle.
+- **[Training and Evaluation](Training-and-Evaluation)** - feed the dataset to `vehicle-keypoints`, the kill-switch gate, and how to read the result.
+- **[Troubleshooting](Troubleshooting)** - every gotcha that cost real time: floating vehicles, the Zen DDC crash, GPU TDR, transient null world, and more.
+
+Background:
+
+- **[Pipeline](Pipeline)** - the engineering walkthrough: road detection, keypoint projection, gold-path render, export, and calibration.
 
 ## The idea in one paragraph
 
