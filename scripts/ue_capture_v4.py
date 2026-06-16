@@ -190,7 +190,12 @@ def ground_snap(rig, P):
         if nrm.z > 0.7 and (P.z - 400.0) <= pt.z <= (P.z + 100.0):
             ground.append(pt.z)
     if ground:
-        road_z = min(ground)
+        # The ZoneGraph lane sits ~on the road (road_z is always within a few cm of the
+        # lane Z at City Sample venues). Pick the up-facing hit CLOSEST to the lane Z:
+        # parked-car roofs are above it and a transient under-street proxy floor (z~0
+        # before the real GROUND_ mesh streams in) is far below it - both are rejected.
+        # Taking the minimum instead would grab that proxy floor and sink the rig.
+        road_z = min(ground, key=lambda z: abs(z - P.z))
     else:
         unreal.log_warning(f"ground_snap: no ground hit near lane Z {P.z:.1f}; using lane Z")
         road_z = P.z
@@ -255,6 +260,48 @@ def pick_street_lane(cx, cy, radius=3000.0):
     return P, yaw
 
 
+def _project_px(cam, world_pt):
+    """Project a world point to pixels with the SAME NDC math the C++ keypoint
+    annotator uses (validated to match capture_points within 0.1 px). Returns None
+    if the point is behind the camera. FOV is treated as horizontal; aspect on Y."""
+    cl = cam.get_actor_transform().inverse_transform_location(world_pt)
+    if cl.x <= 1.0:
+        return None
+    half = math.tan(math.radians(FOV / 2.0))
+    ndcx = (cl.y / cl.x) / half
+    ndcy = (cl.z / cl.x) / half * (IMG_W / IMG_H)
+    return (IMG_W / 2.0 + ndcx * (IMG_W / 2.0), IMG_H / 2.0 - ndcy * (IMG_H / 2.0))
+
+
+def _rig_aabb_corners(parts):
+    """The 8 world-AABB corners of every VKR_ mesh part (the rig is static during the
+    orbit, so compute these once and re-project per pose)."""
+    corners = []
+    for a in parts:
+        o, e = a.get_actor_bounds(False)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                for sz in (-1, 1):
+                    corners.append(unreal.Vector(o.x + sx * e.x, o.y + sy * e.y, o.z + sz * e.z))
+    return corners
+
+
+def _project_bbox_px(cam, corners):
+    """Pixel bbox [minX,minY,maxX,maxY] of projected corners, or None. This replaces
+    the C++ CaptureMeshBBox, which projected GetActorBounds of the EMPTY rig root (a
+    phantom box) and produced a small, squarish, mis-seated box. Projecting the real
+    mesh parts' union gives a box tight to the car, reaching the tire bottoms."""
+    xs, ys = [], []
+    for c in corners:
+        p = _project_px(cam, c)
+        if p:
+            xs.append(p[0])
+            ys.append(p[1])
+    if not xs:
+        return None
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
 def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_instances=True):
     """Phase A: build the scene, project every pose, keyframe the camera, write JSONL.
 
@@ -311,6 +358,12 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
 
     inst_anns = _instance_annotators(cx, cy) if with_instances else []
 
+    # Cache the rig's mesh-part AABB corners once (rig is static through the orbit) so
+    # the per-pose bbox is the projection of the real car mesh, not the phantom
+    # GetActorBounds of the empty rig root that the C++ CaptureMeshBBox used.
+    rig_parts = [a for a in eas.get_all_level_actors() if a.get_actor_label().startswith("VKR_")]
+    rig_corners = _rig_aabb_corners(rig_parts)
+
     poses = orbit_poses(P, n_azim=n_azim)
 
     # Level sequence: one camera, keyframed transform (constant), camera cut [0,N)
@@ -343,16 +396,16 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
         cam.set_actor_rotation(look, False)
         # keyframe this pose (constant interp -> sharp still per frame)
         _key_transform(ch, i, loc, look)
-        # rig instance
+        # rig instance: bbox from the real mesh-part union projected this pose
         res = ann.capture_points(cc, IMG_W, IMG_H)
-        bb = ann.capture_mesh_b_box(cc, IMG_W, IMG_H)
-        instances = [_instance_record(_kpts_from_res(res, names), bb)]
-        # city vehicle instances
+        rig_bb = _project_bbox_px(cam, rig_corners)
+        instances = [_instance_record(_kpts_from_res(res, names), rig_bb)]
+        # city vehicle instances: the probe holds no mesh, so its mesh-bbox would be
+        # degenerate - fall back to the keypoint hull (bb=None) in the converter.
         for probe, wv_ann, wv_names, xform in inst_anns:
             probe.set_actor_transform(xform, False, False)
             wres = wv_ann.capture_points(cc, IMG_W, IMG_H)
-            wbb = wv_ann.capture_mesh_b_box(cc, IMG_W, IMG_H)
-            rec = _instance_record(_kpts_from_res(wres, wv_names), wbb)
+            rec = _instance_record(_kpts_from_res(wres, wv_names), None)
             if rec is not None and sum(1 for k in rec["keypoints"] if k[2] > 0) >= 2:
                 instances.append(rec)
         rec0 = instances[0]
@@ -388,13 +441,15 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
 
 
 def _instance_record(kpts, bb):
-    """Build a JSONL instance dict: flat [x,y,v] keypoints + bbox_px, or None if empty."""
+    """Build a JSONL instance dict: flat [x,y,v] keypoints, plus bbox_px when known
+    (a [minX,minY,maxX,maxY] list). bb=None omits bbox_px so the COCO converter falls
+    back to the keypoint hull. Returns None if no keypoint is visible."""
     if sum(1 for k in kpts if k["v"] > 0) == 0:
         return None
-    return {
-        "keypoints": [[k["x"], k["y"], k["v"]] for k in kpts],
-        "bbox_px": [bb.x, bb.y, bb.z, bb.w],
-    }
+    rec = {"keypoints": [[k["x"], k["y"], k["v"]] for k in kpts]}
+    if bb is not None:
+        rec["bbox_px"] = [bb[0], bb[1], bb[2], bb[3]]
+    return rec
 
 
 def _key_transform(ch, frame, loc, rot):
