@@ -21,6 +21,7 @@ public class UESynthCapture : ModuleRules
         {
             "Slate",
             "SlateCore",
+            "ZoneGraph",
         });
 
         if (Target.bBuildEditor || Target.bCompileAgainstEditor)
