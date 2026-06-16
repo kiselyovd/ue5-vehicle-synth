@@ -44,6 +44,24 @@ def _world():
     return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
 
 
+def _disable_hlod_proxies():
+    """Disable every WorldPartitionHLOD proxy (collision off + hide, in-memory only).
+
+    At distant venues the real WP cell streams in via load_actors, but the HLOD proxy
+    "fake ground" stays present ABOVE the real road (~45 cm here) WITH collision, so a
+    downward road trace hits the proxy instead of the asphalt -> the rig seats too high
+    and floats in the MRQ render (which uses the real streamed road). Disabling the
+    proxies lets the trace reach the real GROUND_ mesh. Never saved - reapply per setup."""
+    eas = _eas()
+    n = 0
+    for a in eas.get_all_level_actors():
+        if isinstance(a, unreal.WorldPartitionHLOD) or "HLOD" in a.get_actor_label():
+            a.set_actor_enable_collision(False)
+            a.set_is_temporarily_hidden_in_editor(True)
+            n += 1
+    return n
+
+
 def teardown():
     """Destroy all VK_/VKR_ scratch actors so the next group starts clean."""
     eas = _eas()
@@ -130,20 +148,38 @@ def ground_snap(rig, P):
     world = _world()
     eas = _eas()
     ignore = [a for a in eas.get_all_level_actors() if a.get_actor_label().startswith(("VK_Rig", "VKR_"))]
-    hit = unreal.SystemLibrary.line_trace_single(
-        world, unreal.Vector(P.x, P.y, P.z + 600.0), unreal.Vector(P.x, P.y, P.z - 600.0),
+    # The ZoneGraph lane-graph Z is NOT the road surface - at some venues it floats
+    # ~1-1.5 m above the asphalt, so seating to the lane Z launches the rig into the
+    # air. The road is the real surface under the spawn point. A single trace can hit
+    # a PARKED-CAR ROOF first (above the road), so multi-trace downward and keep the
+    # LOWEST up-facing ground hit within a sane window below the lane Z: car roofs are
+    # intermediate hits above the road, so the minimum-Z ground hit is the asphalt.
+    hits = unreal.SystemLibrary.line_trace_multi(
+        world, unreal.Vector(P.x, P.y, P.z + 1000.0), unreal.Vector(P.x, P.y, P.z - 800.0),
         unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ignore, unreal.DrawDebugTrace.NONE, True,
-    )
-    # The lane-graph Z is reliably ~ the road surface; only trust the trace when it
-    # agrees with it. A trace hit far above the lane means it struck a parked car
-    # (or other geometry) under the spawn point, which would launch the rig skyward.
-    road_z = P.z
-    if hit:
-        traced = hit.to_tuple()[5].z
-        if abs(traced - P.z) < 40.0:
-            road_z = traced
-    o, e = rig.get_actor_bounds(False)
-    rig_bottom = o.z - e.z
+    ) or []
+    ground = []
+    for h in hits:
+        t = h.to_tuple()
+        pt, nrm = t[5], t[6]
+        # up-facing surface (not a wall/car side), within [-400, +100] cm of the lane Z
+        if nrm.z > 0.7 and (P.z - 400.0) <= pt.z <= (P.z + 100.0):
+            ground.append(pt.z)
+    if ground:
+        road_z = min(ground)
+    else:
+        unreal.log_warning(f"ground_snap: no ground hit near lane Z {P.z:.1f}; using lane Z")
+        road_z = P.z
+    # The rig root is an EMPTY actor; the visible car is 10 SEPARATE StaticMeshActors
+    # attached to it. rig.get_actor_bounds() on the empty root returns a phantom box
+    # (~126 cm too low here) - NOT the car's true extent - so seating to it floats the
+    # car. Compute the TRUE bottom as the min Z over the attached VKR_ mesh parts.
+    parts = [a for a in eas.get_all_level_actors() if a.get_actor_label().startswith("VKR_")]
+    bottoms = []
+    for a in parts:
+        po, pe = a.get_actor_bounds(False)
+        bottoms.append(po.z - pe.z)
+    rig_bottom = min(bottoms) if bottoms else (rig.get_actor_bounds(False)[0].z - rig.get_actor_bounds(False)[1].z)
     loc = rig.get_actor_location()
     rig.set_actor_location(unreal.Vector(loc.x, loc.y, loc.z + (road_z - rig_bottom)), False, False)
     return road_z
@@ -209,6 +245,7 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
             break
         time.sleep(1.0)
     wp.load_actors([d.guid for d in (descs or [])])
+    _disable_hlod_proxies()
     if light_name:
         try:
             ue_lighting.apply_lighting(light_name)
