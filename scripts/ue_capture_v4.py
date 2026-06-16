@@ -134,9 +134,14 @@ def ground_snap(rig, P):
         world, unreal.Vector(P.x, P.y, P.z + 600.0), unreal.Vector(P.x, P.y, P.z - 600.0),
         unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ignore, unreal.DrawDebugTrace.NONE, True,
     )
-    if not hit:
-        return P.z
-    road_z = hit.to_tuple()[5].z
+    # The lane-graph Z is reliably ~ the road surface; only trust the trace when it
+    # agrees with it. A trace hit far above the lane means it struck a parked car
+    # (or other geometry) under the spawn point, which would launch the rig skyward.
+    road_z = P.z
+    if hit:
+        traced = hit.to_tuple()[5].z
+        if abs(traced - P.z) < 40.0:
+            road_z = traced
     o, e = rig.get_actor_bounds(False)
     rig_bottom = o.z - e.z
     loc = rig.get_actor_location()
