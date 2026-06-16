@@ -1,6 +1,6 @@
 # ue5-vehicle-synth Wiki
 
-> These pages are written to be pasted directly into the GitHub Wiki once the repository is published. Image links use raw GitHub URLs that resolve after the repo is public. While browsing inside the repository, the same images live under [`docs/images/`](../docs/images).
+> Image links use raw GitHub URLs from the main repository. The source copies of these pages and the figures live under [`wiki/`](https://github.com/kiselyovd/ue5-vehicle-synth/tree/main/wiki) and [`docs/images/`](https://github.com/kiselyovd/ue5-vehicle-synth/tree/main/docs/images) in the main repo.
 
 `ue5-vehicle-synth` generates synthetic vehicle-keypoint training data inside Unreal Engine 5 and Epic's City Sample, then uses it to extend the [`vehicle-keypoints`](https://github.com/kiselyovd/vehicle-keypoints) model from 14 to 24 keypoints with a sim-to-real recipe.
 
