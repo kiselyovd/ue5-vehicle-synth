@@ -47,6 +47,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UESynth")
     TArray<FCapturedKeypoint> CapturePoints(UCameraComponent* CameraComp, int32 ImageWidth, int32 ImageHeight) const;
 
+    // Vehicle actor-bounds bbox projected to pixels: (minX, minY, maxX, maxY).
+    // Returns a degenerate box (maxX <= minX) when fewer than two bound corners
+    // are in front of the camera; the Python converter then falls back to the
+    // keypoint hull.
+    UFUNCTION(BlueprintCallable, Category = "UESynth")
+    FVector4 CaptureMeshBBox(UCameraComponent* CameraComp, int32 ImageWidth, int32 ImageHeight) const;
+
 protected:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

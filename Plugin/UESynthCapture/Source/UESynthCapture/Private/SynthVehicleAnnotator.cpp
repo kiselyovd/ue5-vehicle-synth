@@ -8,6 +8,32 @@
 #include "Engine/HitResult.h"
 #include "CollisionQueryParams.h"
 
+namespace
+{
+    // Returns true and fills OutPixel if WorldP is in front of the camera.
+    // Mirrors the NDC math in CapturePoints.
+    bool ProjectWorldPointToPixel(
+        const FTransform& CamXform, float FieldOfViewDeg,
+        int32 ImageWidth, int32 ImageHeight,
+        const FVector& WorldP, FVector2D& OutPixel)
+    {
+        const FVector CamLocalP = CamXform.InverseTransformPosition(WorldP);
+        if (CamLocalP.X <= 0.0f)
+        {
+            return false;
+        }
+        const float FOVHalfRad = FMath::DegreesToRadians(FieldOfViewDeg * 0.5f);
+        const float AspectRatio = static_cast<float>(ImageWidth) / static_cast<float>(ImageHeight);
+        const float HalfImgW = ImageWidth * 0.5f;
+        const float HalfImgH = ImageHeight * 0.5f;
+        const float NDCx = (CamLocalP.Y / CamLocalP.X) / FMath::Tan(FOVHalfRad);
+        const float NDCy = (CamLocalP.Z / CamLocalP.X) / FMath::Tan(FOVHalfRad) * AspectRatio;
+        OutPixel.X = HalfImgW + NDCx * HalfImgW;
+        OutPixel.Y = HalfImgH - NDCy * HalfImgH;
+        return true;
+    }
+}
+
 USynthVehicleAnnotator::USynthVehicleAnnotator()
 {
     PrimaryComponentTick.bCanEverTick = false;
@@ -158,4 +184,53 @@ TArray<FCapturedKeypoint> USynthVehicleAnnotator::CapturePoints(UCameraComponent
     }
 
     return Out;
+}
+
+FVector4 USynthVehicleAnnotator::CaptureMeshBBox(UCameraComponent* CameraComp, int32 ImageWidth, int32 ImageHeight) const
+{
+    const FVector4 Degenerate(0.0, 0.0, 0.0, 0.0);
+    AActor* Owner = GetOwner();
+    if (!Owner || !CameraComp)
+    {
+        return Degenerate;
+    }
+
+    FVector Origin, Extent;
+    Owner->GetActorBounds(/*bOnlyCollidingComponents*/ false, Origin, Extent);
+
+    const FTransform CamXform = CameraComp->GetComponentTransform();
+    const float FieldOfViewDeg = CameraComp->FieldOfView;
+
+    float MinX = TNumericLimits<float>::Max();
+    float MinY = TNumericLimits<float>::Max();
+    float MaxX = -TNumericLimits<float>::Max();
+    float MaxY = -TNumericLimits<float>::Max();
+    int32 Valid = 0;
+
+    for (int32 sx = -1; sx <= 1; sx += 2)
+    for (int32 sy = -1; sy <= 1; sy += 2)
+    for (int32 sz = -1; sz <= 1; sz += 2)
+    {
+        const FVector Corner = Origin + FVector(sx * Extent.X, sy * Extent.Y, sz * Extent.Z);
+        FVector2D Px;
+        if (ProjectWorldPointToPixel(CamXform, FieldOfViewDeg, ImageWidth, ImageHeight, Corner, Px))
+        {
+            MinX = FMath::Min(MinX, static_cast<float>(Px.X));
+            MinY = FMath::Min(MinY, static_cast<float>(Px.Y));
+            MaxX = FMath::Max(MaxX, static_cast<float>(Px.X));
+            MaxY = FMath::Max(MaxY, static_cast<float>(Px.Y));
+            ++Valid;
+        }
+    }
+
+    if (Valid < 2)
+    {
+        return Degenerate;
+    }
+
+    MinX = FMath::Clamp(MinX, 0.0f, static_cast<float>(ImageWidth));
+    MaxX = FMath::Clamp(MaxX, 0.0f, static_cast<float>(ImageWidth));
+    MinY = FMath::Clamp(MinY, 0.0f, static_cast<float>(ImageHeight));
+    MaxY = FMath::Clamp(MaxY, 0.0f, static_cast<float>(ImageHeight));
+    return FVector4(MinX, MinY, MaxX, MaxY);
 }

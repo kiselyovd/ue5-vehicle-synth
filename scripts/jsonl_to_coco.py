@@ -21,31 +21,45 @@ from ue5_vehicle_synth.postprocess import mask_offscreen_keypoints, validate_coc
 from ue5_vehicle_synth.schema import EXTENDED_KEYPOINT_NAMES
 
 
-def _keypoints_from_list(raw: list[dict]) -> list[tuple[float, float, int]]:
-    """Convert a list of {name, x, y, v} dicts into ordered [(x, y, v), ...] tuples.
+def _keypoints_from_list(raw: list) -> list[tuple[float, float, int]]:
+    """Convert keypoints into ordered [(x, y, v), ...] tuples.
+
+    Accepts either:
+    - a list of {name, x, y, v} dicts (named format from the UE annotator), or
+    - a list of [x, y, v] plain sequences (compact format; order must already
+      match EXTENDED_KEYPOINT_NAMES).
 
     Order is determined by EXTENDED_KEYPOINT_NAMES (24 entries).
     """
-    by_name = {k["name"]: k for k in raw}
-    return [
-        (float(by_name[name]["x"]), float(by_name[name]["y"]), int(by_name[name]["v"]))
-        for name in EXTENDED_KEYPOINT_NAMES
-    ]
+    if raw and isinstance(raw[0], dict):
+        by_name = {k["name"]: k for k in raw}
+        return [
+            (float(by_name[name]["x"]), float(by_name[name]["y"]), int(by_name[name]["v"]))
+            for name in EXTENDED_KEYPOINT_NAMES
+        ]
+    # Compact [x, y, v] sequence - already in schema order.
+    return [(float(x), float(y), int(v)) for x, y, v in raw]
 
 
 def _annotation_from_kpts(
     exp: CocoExporter,
     img_id: int,
     kpts: list[tuple[float, float, int]],
+    bbox_px: list[float] | None = None,
 ) -> None:
-    """Add one COCO annotation for the given keypoint list to the exporter."""
+    """Add one COCO annotation. Prefer an explicit pixel bbox (minx, miny, maxx,
+    maxy) from the capture; fall back to the tight hull over labeled keypoints."""
     labeled = [(x, y) for x, y, v in kpts if v > 0]
     if not labeled:
         return
-    xs = [p[0] for p in labeled]
-    ys = [p[1] for p in labeled]
-    x0, y0 = min(xs), min(ys)
-    w, h = max(xs) - x0, max(ys) - y0
+    if bbox_px is not None and bbox_px[2] > bbox_px[0] and bbox_px[3] > bbox_px[1]:
+        x0, y0 = bbox_px[0], bbox_px[1]
+        w, h = bbox_px[2] - x0, bbox_px[3] - y0
+    else:
+        xs = [p[0] for p in labeled]
+        ys = [p[1] for p in labeled]
+        x0, y0 = min(xs), min(ys)
+        w, h = max(xs) - x0, max(ys) - y0
     exp.add_annotation(image_id=img_id, bbox=(x0, y0, w, h), keypoints=kpts, area=w * h)
 
 
@@ -83,7 +97,7 @@ def main(captures: Path, out: Path, dataset_name: str) -> None:
             # Multi-instance path: one annotation per instance
             for inst in rec["instances"]:
                 kpts = _keypoints_from_list(inst["keypoints"])
-                _annotation_from_kpts(exp, img_id, kpts)
+                _annotation_from_kpts(exp, img_id, kpts, inst.get("bbox_px"))
         else:
             # Legacy path: single annotation from top-level keypoints
             kpts = _keypoints_from_list(rec["keypoints"])

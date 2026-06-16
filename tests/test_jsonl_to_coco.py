@@ -135,3 +135,29 @@ def test_instance_bboxes_are_tight(synth_dataset: tuple[Path, Path]) -> None:
     assert ann2["bbox"][0] == pytest.approx(600.0)
     assert ann2["bbox"][1] == pytest.approx(400.0)
     assert ann2["bbox"][2] == pytest.approx(23.0)
+
+
+def test_instance_bbox_px_overrides_hull(tmp_path):
+    img = tmp_path / "f0.png"
+    Image.new("RGB", (1280, 720)).save(img)
+    rec = {
+        "file": "f0.png",
+        "frame": 0,
+        "rig_yaw": 0,
+        "cam": 0,
+        "width": 1280,
+        "height": 720,
+        "instances": [
+            {
+                "keypoints": [[100.0, 100.0, 2]] + [[0.0, 0.0, 0]] * 23,
+                "bbox_px": [50.0, 60.0, 300.0, 400.0],
+            }
+        ],
+    }
+    captures = tmp_path / "captures.jsonl"
+    captures.write_text(json.dumps(rec) + "\n", encoding="utf-8")
+    out = tmp_path / "coco.json"
+    res = CliRunner().invoke(main, ["--captures", str(captures), "--out", str(out)])
+    assert res.exit_code == 0, res.output
+    coco = json.loads(out.read_text(encoding="utf-8"))
+    assert coco["annotations"][0]["bbox"] == [50.0, 60.0, 250.0, 340.0]
