@@ -22,6 +22,7 @@ import json
 import math
 import os
 import sys
+import time
 from pathlib import Path
 
 import unreal
@@ -52,6 +53,34 @@ def teardown():
             eas.destroy_actor(a)
 
 
+_MESH_EXCLUDE = (
+    "_Proxy", "_Collision", "_Destructible", "_Skinning", "_Exterior", "_LOD",
+    "_Decal", "MotionBlur", "Brake_Pad",
+)
+
+
+def _discover_vehicle_meshes(vehicle_id):
+    """List the renderable StaticMesh asset paths for a City Sample vehicle whose
+    config has no explicit `meshes` list (the bone-derived configs). vehicle_id is
+    like 'citysample_vehCar_vehicle06'; meshes live under /Game/Vehicle/<veh>/Mesh."""
+    veh = vehicle_id.replace("citysample_", "")
+    folder = f"/Game/Vehicle/{veh}/Mesh"
+    ar = unreal.AssetRegistryHelpers.get_asset_registry()
+    out = []
+    for a in ar.get_assets_by_path(folder, recursive=True):
+        if str(a.asset_class_path.asset_name) != "StaticMesh":
+            continue
+        name = str(a.asset_name)
+        # skip the combined full-body mesh (SM_veh<Type>_vehicleNN) - we assemble
+        # from the composite parts (SM_Frame, SM_Door_*, SM_Wheel_*, glass) like v13
+        if not name.startswith("SM_") or name.startswith("SM_veh"):
+            continue
+        if any(x in name for x in _MESH_EXCLUDE):
+            continue
+        out.append(str(a.package_name))
+    return out
+
+
 def build_rig(config_path: str, P: unreal.Vector, yaw: float):
     """Spawn the 10-mesh replica at P aligned to yaw, MOVABLE + per-poly collision.
 
@@ -61,10 +90,11 @@ def build_rig(config_path: str, P: unreal.Vector, yaw: float):
     """
     eas = _eas()
     cfg = json.load(open(config_path, encoding="utf-8"))
+    meshes = cfg.get("meshes") or _discover_vehicle_meshes(cfg["vehicle_id"])
     rig = eas.spawn_actor_from_class(unreal.Actor, P, unreal.Rotator(0, 0, yaw))
     rig.set_actor_label("VK_Rig")
     rig.root_component.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
-    for i, mpath in enumerate(cfg["meshes"]):
+    for i, mpath in enumerate(meshes):
         sm = unreal.EditorAssetLibrary.load_asset(mpath)
         if not sm:
             continue
@@ -91,7 +121,30 @@ def build_rig(config_path: str, P: unreal.Vector, yaw: float):
     return rig, ann, list(cfg["keypoints"].keys())
 
 
-def orbit_poses(P, n_azim=16, dists=(500.0, 750.0), heights=(120.0, 200.0, 300.0)):
+def ground_snap(rig, P):
+    """Seat the rig's wheels on the real road surface. The ZoneGraph lane Z is the
+    lane-graph height, not the road mesh surface, and different vehicles sit at
+    different heights above their origin - so trace down (ignoring the rig itself)
+    to the road and shift the rig so its lowest point touches it. Returns the
+    road-surface Z (for the orbit look-at)."""
+    world = _world()
+    eas = _eas()
+    ignore = [a for a in eas.get_all_level_actors() if a.get_actor_label().startswith(("VK_Rig", "VKR_"))]
+    hit = unreal.SystemLibrary.line_trace_single(
+        world, unreal.Vector(P.x, P.y, P.z + 600.0), unreal.Vector(P.x, P.y, P.z - 600.0),
+        unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ignore, unreal.DrawDebugTrace.NONE, True,
+    )
+    if not hit:
+        return P.z
+    road_z = hit.to_tuple()[5].z
+    o, e = rig.get_actor_bounds(False)
+    rig_bottom = o.z - e.z
+    loc = rig.get_actor_location()
+    rig.set_actor_location(unreal.Vector(loc.x, loc.y, loc.z + (road_z - rig_bottom)), False, False)
+    return road_z
+
+
+def orbit_poses(P, n_azim=16, dists=(500.0, 750.0), heights=(175.0, 255.0, 340.0)):
     """Camera poses orbiting the rig: n_azim x dists x heights, each looking at the rig."""
     poses = []
     look_at = unreal.Vector(P.x, P.y, P.z + 70.0)
@@ -142,7 +195,15 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     cx, cy = venue[0], venue[1]
     wp = unreal.WorldPartitionBlueprintLibrary
     box = unreal.Box(unreal.Vector(cx - 4000, cy - 4000, -4000), unreal.Vector(cx + 4000, cy + 4000, 6000))
-    wp.load_actors([d.guid for d in wp.get_intersecting_actor_descs(box)])
+    # WorldPartition queries can transiently return None right after a PIE render
+    # teardown; retry until the descriptor list resolves.
+    descs = None
+    for _ in range(30):
+        descs = wp.get_intersecting_actor_descs(box)
+        if descs is not None:
+            break
+        time.sleep(1.0)
+    wp.load_actors([d.guid for d in (descs or [])])
     if light_name:
         try:
             ue_lighting.apply_lighting(light_name)
@@ -155,6 +216,8 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     P, yaw = site
     teardown()
     _rig, ann, names = build_rig(rig_config, P, yaw)
+    road_z = ground_snap(_rig, P)
+    P = unreal.Vector(P.x, P.y, road_z)
 
     eas = _eas()
     cam = eas.spawn_actor_from_class(unreal.CameraActor, P, unreal.Rotator(0, 0, 0))
