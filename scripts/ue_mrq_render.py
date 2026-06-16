@@ -17,6 +17,4 @@ RES = (1280, 720)
 
 def render_cameras(camera_names: list[str], name_prefix: str) -> None:
     """Render one PNG per named CineCameraActor. Finalized in Task 8."""
-    raise NotImplementedError(
-        "Finalize MRQ submit against the live UE 5.6 API in Task 8"
-    )
+    raise NotImplementedError("Finalize MRQ submit against the live UE 5.6 API in Task 8")

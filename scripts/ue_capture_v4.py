@@ -13,8 +13,8 @@ MCP is unresponsive while MRQ renders (the render runs on the game thread), so
 callers monitor render completion via the filesystem, not via MCP.
 """
 
-# P/C are point/constant math names; SIM115/E501 relax for terse in-editor unreal calls.
-# ruff: noqa: N803, N806, SIM115, E501
+# P/C are point/constant math names; SIM115 relaxes terse in-editor unreal calls.
+# ruff: noqa: N803, N806, SIM115
 
 from __future__ import annotations
 
@@ -67,13 +67,22 @@ def teardown():
     eas = _eas()
     for a in eas.get_all_level_actors():
         lbl = a.get_actor_label()
-        if lbl.startswith(("VKR_", "VK_Rig", "VK_Cam", "VK_InstProbe", "VK_SC", "VK_Diag", "VK_Calib")):
+        if lbl.startswith(
+            ("VKR_", "VK_Rig", "VK_Cam", "VK_InstProbe", "VK_SC", "VK_Diag", "VK_Calib")
+        ):
             eas.destroy_actor(a)
 
 
 _MESH_EXCLUDE = (
-    "_Proxy", "_Collision", "_Destructible", "_Skinning", "_Exterior", "_LOD",
-    "_Decal", "MotionBlur", "Brake_Pad",
+    "_Proxy",
+    "_Collision",
+    "_Destructible",
+    "_Skinning",
+    "_Exterior",
+    "_LOD",
+    "_Decal",
+    "MotionBlur",
+    "Brake_Pad",
 )
 
 
@@ -129,8 +138,12 @@ def build_rig(config_path: str, P: unreal.Vector, yaw: float):
         smc.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
         smc.set_collision_enabled(unreal.CollisionEnabled.QUERY_AND_PHYSICS)
         a.attach_to_actor(
-            rig, "", unreal.AttachmentRule.SNAP_TO_TARGET,
-            unreal.AttachmentRule.SNAP_TO_TARGET, unreal.AttachmentRule.KEEP_WORLD, False,
+            rig,
+            "",
+            unreal.AttachmentRule.SNAP_TO_TARGET,
+            unreal.AttachmentRule.SNAP_TO_TARGET,
+            unreal.AttachmentRule.KEEP_WORLD,
+            False,
         )
     ann = unreal.new_object(unreal.SynthVehicleAnnotator, outer=rig)
     ann.set_editor_property(
@@ -147,17 +160,28 @@ def ground_snap(rig, P):
     road-surface Z (for the orbit look-at)."""
     world = _world()
     eas = _eas()
-    ignore = [a for a in eas.get_all_level_actors() if a.get_actor_label().startswith(("VK_Rig", "VKR_"))]
+    ignore = [
+        a for a in eas.get_all_level_actors() if a.get_actor_label().startswith(("VK_Rig", "VKR_"))
+    ]
     # The ZoneGraph lane-graph Z is NOT the road surface - at some venues it floats
     # ~1-1.5 m above the asphalt, so seating to the lane Z launches the rig into the
     # air. The road is the real surface under the spawn point. A single trace can hit
     # a PARKED-CAR ROOF first (above the road), so multi-trace downward and keep the
     # LOWEST up-facing ground hit within a sane window below the lane Z: car roofs are
     # intermediate hits above the road, so the minimum-Z ground hit is the asphalt.
-    hits = unreal.SystemLibrary.line_trace_multi(
-        world, unreal.Vector(P.x, P.y, P.z + 1000.0), unreal.Vector(P.x, P.y, P.z - 800.0),
-        unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ignore, unreal.DrawDebugTrace.NONE, True,
-    ) or []
+    hits = (
+        unreal.SystemLibrary.line_trace_multi(
+            world,
+            unreal.Vector(P.x, P.y, P.z + 1000.0),
+            unreal.Vector(P.x, P.y, P.z - 800.0),
+            unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+            False,
+            ignore,
+            unreal.DrawDebugTrace.NONE,
+            True,
+        )
+        or []
+    )
     ground = []
     for h in hits:
         t = h.to_tuple()
@@ -179,7 +203,11 @@ def ground_snap(rig, P):
     for a in parts:
         po, pe = a.get_actor_bounds(False)
         bottoms.append(po.z - pe.z)
-    rig_bottom = min(bottoms) if bottoms else (rig.get_actor_bounds(False)[0].z - rig.get_actor_bounds(False)[1].z)
+    rig_bottom = (
+        min(bottoms)
+        if bottoms
+        else (rig.get_actor_bounds(False)[0].z - rig.get_actor_bounds(False)[1].z)
+    )
     loc = rig.get_actor_location()
     rig.set_actor_location(unreal.Vector(loc.x, loc.y, loc.z + (road_z - rig_bottom)), False, False)
     return road_z
@@ -214,7 +242,8 @@ def _kpts_from_res(res, names):
 def pick_street_lane(cx, cy, radius=3000.0):
     """Return (P, yaw) for the nearest drivable street lane to (cx, cy), or None."""
     lanes = [
-        p for p in ue_zonegraph.query_lane_points(unreal.Vector(cx, cy, 0), radius)
+        p
+        for p in ue_zonegraph.query_lane_points(unreal.Vector(cx, cy, 0), radius)
         if 30.0 < p.position[2] < 150.0
     ]
     if not lanes:
@@ -235,7 +264,9 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     world = _world()
     cx, cy = venue[0], venue[1]
     wp = unreal.WorldPartitionBlueprintLibrary
-    box = unreal.Box(unreal.Vector(cx - 4000, cy - 4000, -4000), unreal.Vector(cx + 4000, cy + 4000, 6000))
+    box = unreal.Box(
+        unreal.Vector(cx - 4000, cy - 4000, -4000), unreal.Vector(cx + 4000, cy + 4000, 6000)
+    )
     # WorldPartition queries can transiently return None right after a PIE render
     # teardown; retry until the descriptor list resolves.
     descs = None
@@ -286,7 +317,10 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     if unreal.EditorAssetLibrary.does_directory_exist("/Game/VK_Temp"):
         unreal.EditorAssetLibrary.delete_directory("/Game/VK_Temp")
     seq = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
-        f"VK_Seq_{group_tag}", "/Game/VK_Temp", unreal.LevelSequence, unreal.LevelSequenceFactoryNew()
+        f"VK_Seq_{group_tag}",
+        "/Game/VK_Temp",
+        unreal.LevelSequence,
+        unreal.LevelSequenceFactoryNew(),
     )
     seq.set_display_rate(unreal.FrameRate(24, 1))
     seq.set_playback_start(0)
@@ -324,18 +358,32 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
         rec0 = instances[0]
         if rec0 is None:
             continue
-        lines.append(json.dumps({
-            "file": f"{group_tag}.{i:04d}.png", "frame": i, "rig_yaw": yaw, "cam": i,
-            "width": IMG_W, "height": IMG_H, "venue": str(venue), "lighting": light_name,
-            "instances": [r for r in instances if r is not None],
-        }))
+        lines.append(
+            json.dumps(
+                {
+                    "file": f"{group_tag}.{i:04d}.png",
+                    "frame": i,
+                    "rig_yaw": yaw,
+                    "cam": i,
+                    "width": IMG_W,
+                    "height": IMG_H,
+                    "venue": str(venue),
+                    "lighting": light_name,
+                    "instances": [r for r in instances if r is not None],
+                }
+            )
+        )
 
     unreal.EditorAssetLibrary.save_asset(seq.get_path_name())
     jsonl = f"{out_dir}/captures.jsonl"
     open(jsonl, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     return {
-        "seq": seq.get_path_name(), "jsonl": jsonl, "n_poses": len(poses),
-        "map": world.get_path_name(), "out_dir": out_dir, "site": (P.x, P.y, P.z, yaw),
+        "seq": seq.get_path_name(),
+        "jsonl": jsonl,
+        "n_poses": len(poses),
+        "map": world.get_path_name(),
+        "out_dir": out_dir,
+        "site": (P.x, P.y, P.z, yaw),
     }
 
 
@@ -363,6 +411,7 @@ def _instance_annotators(cx, cy, radius=6000.0):
     (probe_actor, annotator, schema_names, instance_transform)."""
     try:
         import ue_capture_batch
+
         # discover_world_vehicles filters by the module VENUE global + caches; point
         # it at this group's venue and force a fresh scan.
         ue_capture_batch.VENUE = unreal.Vector(cx, cy, 0.0)
@@ -378,12 +427,15 @@ def _instance_annotators(cx, cy, radius=6000.0):
             wv_cfg = json.load(open(wv_config_path, encoding="utf-8"))
         except Exception:
             continue
-        probe = eas.spawn_actor_from_class(unreal.Actor, unreal.Vector(0, 0, -100000), unreal.Rotator(0, 0, 0))
+        probe = eas.spawn_actor_from_class(
+            unreal.Actor, unreal.Vector(0, 0, -100000), unreal.Rotator(0, 0, 0)
+        )
         probe.set_actor_label(f"VK_InstProbe_{idx}")
         probe.root_component.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
         wv_ann = unreal.new_object(unreal.SynthVehicleAnnotator, outer=probe)
         wv_ann.set_editor_property(
-            "local_point_by_schema_name", {k: unreal.Vector(*v) for k, v in wv_cfg["keypoints"].items()}
+            "local_point_by_schema_name",
+            {k: unreal.Vector(*v) for k, v in wv_cfg["keypoints"].items()},
         )
         xform = unreal.Transform(unreal.Vector(*loc), unreal.Rotator(*rot), unreal.Vector(1, 1, 1))
         out.append((probe, wv_ann, list(wv_cfg["keypoints"].keys()), xform))

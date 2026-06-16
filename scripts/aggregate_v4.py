@@ -4,6 +4,7 @@ Each group's captures.jsonl has file='<tag>.NNNN.png' with images under
 <tag>/rgb/. Rewrite each file to '<tag>/rgb/<file>' (relative to the phase0_v4
 root) and concatenate, then convert with jsonl_to_coco.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,7 +37,16 @@ print(f"merged {len(lines)} records -> {merged}")
 
 out = ROOT / "annotations" / "coco.json"
 subprocess.run(
-    [sys.executable, "scripts/jsonl_to_coco.py", "--captures", str(merged),
-     "--out", str(out), "--dataset-name", "phase0-v4"],
-    check=True, cwd="D:/Projects/GitHub/ue5-vehicle-synth",
+    [
+        sys.executable,
+        "scripts/jsonl_to_coco.py",
+        "--captures",
+        str(merged),
+        "--out",
+        str(out),
+        "--dataset-name",
+        "phase0-v4",
+    ],
+    check=True,
+    cwd="D:/Projects/GitHub/ue5-vehicle-synth",
 )

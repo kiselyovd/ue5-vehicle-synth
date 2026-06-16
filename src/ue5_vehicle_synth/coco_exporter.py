@@ -76,7 +76,7 @@ class CocoExporter:
             raise RuntimeError("CocoExporter.begin() must be called before add_annotation")
         if len(keypoints) != 24:
             raise ValueError(f"add_annotation requires exactly 24 keypoints, got {len(keypoints)}")
-        for x, y, v in keypoints:
+        for _x, _y, v in keypoints:
             if v not in _VALID_VISIBILITY:
                 raise ValueError(f"visibility flag must be in {{0, 1, 2}}, got {v}")
 

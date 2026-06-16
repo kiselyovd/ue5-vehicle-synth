@@ -9,7 +9,6 @@ from ue5_vehicle_synth.coco_exporter import CocoExporter
 from ue5_vehicle_synth.schema import (
     EXTENDED_KEYPOINT_NAMES,
     EXTENDED_SKELETON_EDGES,
-    OKS_SIGMAS_24,
 )
 
 

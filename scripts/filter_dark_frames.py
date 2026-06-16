@@ -21,12 +21,25 @@ from PIL import Image
 
 @click.command()
 @click.option("--root", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--dark-threshold", default=0.35, show_default=True, help="max allowed fraction of near-black pixels")
-@click.option("--luma-cutoff", default=35, show_default=True, help="8-bit luminance below which a pixel counts as dark")
+@click.option(
+    "--dark-threshold",
+    default=0.35,
+    show_default=True,
+    help="max allowed fraction of near-black pixels",
+)
+@click.option(
+    "--luma-cutoff",
+    default=35,
+    show_default=True,
+    help="8-bit luminance below which a pixel counts as dark",
+)
 def main(root: Path, dark_threshold: float, luma_cutoff: int) -> None:
     jsonl = root / "captures.jsonl"
-    recs = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines() if line.strip()]
-    kept, dropped = [], []
+    recs = [
+        json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+    kept: list[tuple[dict, float]] = []
+    dropped: list[tuple[dict, float]] = []
     for r in recs:
         im = Image.open(root / r["file"]).convert("L").resize((160, 90))
         dark_frac = float((np.asarray(im, dtype=np.float32) < luma_cutoff).mean())

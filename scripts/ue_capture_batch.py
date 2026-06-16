@@ -64,7 +64,9 @@ _VENUE_RADIUS_CM = 3000.0
 _BODY_MESH_RE = re.compile(r"^SM_(veh[A-Za-z]+_vehicle\d+)$")
 
 
-def discover_world_vehicles(radius_cm: float = _VENUE_RADIUS_CM) -> list[tuple[str, str, tuple, tuple]]:
+def discover_world_vehicles(
+    radius_cm: float = _VENUE_RADIUS_CM,
+) -> list[tuple[str, str, tuple, tuple]]:
     """Enumerate parked City Sample vehicle ISM instances within radius of VENUE.
 
     Also flips the body meshes' collision to complex-as-simple (in memory) so
@@ -174,7 +176,9 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
             probe = a
             break
     if probe is None:
-        probe = eas.spawn_actor_from_class(unreal.Actor, unreal.Vector(0, 0, -100000), unreal.Rotator(0, 0, 0))
+        probe = eas.spawn_actor_from_class(
+            unreal.Actor, unreal.Vector(0, 0, -100000), unreal.Rotator(0, 0, 0)
+        )
         probe.set_actor_label("VK_InstProbe")
         probe.get_editor_property("root_component").set_editor_property(
             "mobility", unreal.ComponentMobility.MOVABLE
@@ -208,7 +212,9 @@ def capture_range(start: int, count: int, n_azim: int = 12) -> str:
         blocking = unreal.SystemLibrary.sphere_overlap_actors(
             world, cam_loc, 35.0, [], unreal.Actor, [rig, cam, sc]
         )
-        blocking = [b for b in (blocking or []) if not b.get_actor_label().startswith(("VKR_", "VK_"))]
+        blocking = [
+            b for b in (blocking or []) if not b.get_actor_label().startswith(("VKR_", "VK_"))
+        ]
         if blocking:
             skipped += 1
             continue
@@ -358,6 +364,7 @@ def capture_v4_chunk(
     if _scripts_dir not in sys.path:
         sys.path.insert(0, _scripts_dir)
     from ue_lighting import apply_lighting
+
     apply_lighting(light_name)
 
     with open(rig_config, encoding="utf-8") as _f:
@@ -428,9 +435,7 @@ def capture_v4_chunk(
             world, cam_loc, 35.0, [], unreal.Actor, [rig_probe, inst_probe]
         )
         blocking = [
-            b
-            for b in (blocking or [])
-            if not b.get_actor_label().startswith(("VKR_", "VK_"))
+            b for b in (blocking or []) if not b.get_actor_label().startswith(("VKR_", "VK_"))
         ]
         if blocking:
             skipped += 1

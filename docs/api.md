@@ -6,41 +6,14 @@ Auto-generated reference for the `ue5_vehicle_synth` package via [mkdocstrings](
 
 ::: ue5_vehicle_synth
 
-## Data
+## COCO Exporter
 
-::: ue5_vehicle_synth.data.datamodule
-::: ue5_vehicle_synth.data.dataset
-::: ue5_vehicle_synth.data.prepare
-::: ue5_vehicle_synth.data.transforms
+::: ue5_vehicle_synth.coco_exporter
 
-## Models
+## Postprocess
 
-::: ue5_vehicle_synth.models.factory
-::: ue5_vehicle_synth.models.lightning_module
-::: ue5_vehicle_synth.models.sklearn_pipeline
+::: ue5_vehicle_synth.postprocess
 
-## Training
+## Schema
 
-::: ue5_vehicle_synth.training.train
-
-## Evaluation
-
-::: ue5_vehicle_synth.evaluation.evaluate
-
-## Inference
-
-::: ue5_vehicle_synth.inference.predict
-
-## Serving
-
-::: ue5_vehicle_synth.serving.dependencies
-::: ue5_vehicle_synth.serving.errors
-::: ue5_vehicle_synth.serving.main
-::: ue5_vehicle_synth.serving.routes
-::: ue5_vehicle_synth.serving.schemas
-
-## Utilities
-
-::: ue5_vehicle_synth.utils.hf_hub
-::: ue5_vehicle_synth.utils.logging
-::: ue5_vehicle_synth.utils.seed
+::: ue5_vehicle_synth.schema

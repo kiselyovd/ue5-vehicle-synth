@@ -22,19 +22,34 @@ _PRESETS = {
     # UE white balance is inverted vs intuition: a HIGHER cam_white_temp warms the
     # image, a LOWER one cools it (the camera compensates for the assumed light).
     "day_clear": {
-        "sun_pitch": -58.0, "sun_yaw": 35.0, "sun_intensity": 5000.0, "sun_temp": 6300.0,
+        "sun_pitch": -58.0,
+        "sun_yaw": 35.0,
+        "sun_intensity": 5000.0,
+        "sun_temp": 6300.0,
         "sky_intensity": 45.0,
-        "cam_white_temp": 6600.0, "cam_exposure_bias": 0.0, "cam_saturation": 1.0,
+        "cam_white_temp": 6600.0,
+        "cam_exposure_bias": 0.0,
+        "cam_saturation": 1.0,
     },
     "golden": {
-        "sun_pitch": -7.0, "sun_yaw": 105.0, "sun_intensity": 2600.0, "sun_temp": 4000.0,
+        "sun_pitch": -7.0,
+        "sun_yaw": 105.0,
+        "sun_intensity": 2600.0,
+        "sun_temp": 4000.0,
         "sky_intensity": 28.0,
-        "cam_white_temp": 8800.0, "cam_exposure_bias": -0.2, "cam_saturation": 1.12,
+        "cam_white_temp": 8800.0,
+        "cam_exposure_bias": -0.2,
+        "cam_saturation": 1.12,
     },
     "overcast": {
-        "sun_pitch": -42.0, "sun_yaw": 0.0, "sun_intensity": 1100.0, "sun_temp": 7000.0,
+        "sun_pitch": -42.0,
+        "sun_yaw": 0.0,
+        "sun_intensity": 1100.0,
+        "sun_temp": 7000.0,
         "sky_intensity": 60.0,
-        "cam_white_temp": 5400.0, "cam_exposure_bias": 0.15, "cam_saturation": 0.8,
+        "cam_white_temp": 5400.0,
+        "cam_exposure_bias": 0.15,
+        "cam_saturation": 0.8,
     },
 }
 
