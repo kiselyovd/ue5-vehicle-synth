@@ -18,12 +18,18 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
   features:
     - content.code.copy
+    - content.code.annotate
+    - navigation.instant
     - navigation.indexes
     - navigation.tabs
+    - navigation.sections
     - navigation.top
-    - toc.integrate
+    - navigation.footer
+    - toc.follow
     - search.highlight
     - search.suggest
 plugins:
@@ -49,13 +55,23 @@ plugins:
             line_length: 80
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.highlight
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.highlight
-  - tables
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 nav:
   - Home: index.md
+  - How it works: pipeline.md
+  - Legal (EULA): legal/CITY_SAMPLE_EULA_REVIEW.md
   - API reference: api.md
