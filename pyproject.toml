@@ -20,6 +20,7 @@ dependencies = [
   "pydantic>=2.7",
   "click>=8.1",
   "huggingface-hub>=1.19.0",
+  "datasets>=5.0.0",
 ]
 
 [dependency-groups]
