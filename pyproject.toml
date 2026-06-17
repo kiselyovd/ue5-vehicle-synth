@@ -19,6 +19,7 @@ dependencies = [
   "opencv-python-headless>=4.10",
   "pydantic>=2.7",
   "click>=8.1",
+  "huggingface-hub>=1.19.0",
 ]
 
 [dependency-groups]
