@@ -4,7 +4,9 @@
 
 `ue5-vehicle-synth` generates synthetic vehicle-keypoint training data inside Unreal Engine 5 and Epic's City Sample, then uses it to extend the [`vehicle-keypoints`](https://github.com/kiselyovd/vehicle-keypoints) model from 14 to 24 keypoints with a sim-to-real recipe.
 
-![Photoreal City Sample frame rendered through Movie Render Queue](https://raw.githubusercontent.com/kiselyovd/ue5-vehicle-synth/main/docs/images/hero_render.png)
+![ue5-vehicle-synth demo: a car drives, gains its 24-point keypoint skeleton, then drives on as a wireframe ghost](https://raw.githubusercontent.com/kiselyovd/ue5-vehicle-synth/main/docs/videos/demo-hero.gif)
+
+**Full demo video:** [docs/videos/demo.mp4](https://github.com/kiselyovd/ue5-vehicle-synth/blob/main/docs/videos/demo.mp4) - three scenes, each a single vehicle driving normally, then with its 24-point keypoint skeleton, then as a wireframe ghost, across different locations and lighting.
 
 ## Pages
 

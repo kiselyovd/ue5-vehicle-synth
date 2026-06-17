@@ -10,7 +10,9 @@ A synthetic vehicle-keypoint dataset pipeline built on Unreal Engine 5 and Epic'
 
 **Russian version:** [README.ru.md](README.ru.md)
 
-![Photoreal City Sample frame rendered through Movie Render Queue](docs/images/hero_render.png)
+![ue5-vehicle-synth demo: a car drives, gains its 24-point keypoint skeleton, then drives on as a wireframe ghost](docs/videos/demo-hero.gif)
+
+> **Full demo video:** [`docs/videos/demo.mp4`](docs/videos/demo.mp4) - three scenes, each a single vehicle driving normally, then with its 24-point keypoint skeleton, then as a wireframe ghost, across different locations and lighting. Rendered in City Sample through Movie Render Queue.
 
 ## Why
 

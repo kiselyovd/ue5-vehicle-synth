@@ -2,7 +2,9 @@
 
 <p align="center"><em>Synthetic vehicle-keypoint datasets, rendered inside Epic's City Sample with Unreal Engine 5.</em></p>
 
-![Photoreal City Sample frame rendered through Movie Render Queue](images/hero_render.png)
+![ue5-vehicle-synth demo: a car drives, gains its 24-point keypoint skeleton, then drives on as a wireframe ghost](videos/demo-hero.gif)
+
+<p align="center"><em>Full demo: <a href="videos/demo.mp4">videos/demo.mp4</a> - three scenes, each a single vehicle driving normally, then with its 24-point keypoint skeleton, then as a wireframe ghost.</em></p>
 
 Real vehicle-keypoint data is scarce and expensive to label. A game engine renders the same scene with **perfect, free, pixel-exact annotations** and unlimited variety of viewpoint, vehicle, weather, and time of day. This project builds that generator as a reusable Unreal Engine C++ plugin and uses it to extend the [`vehicle-keypoints`](https://github.com/kiselyovd/vehicle-keypoints) model from a 14-point to a 24-point schema with a sim-to-real recipe.
 

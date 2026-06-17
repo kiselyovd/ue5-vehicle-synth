@@ -10,7 +10,9 @@
 
 **English version:** [README.md](README.md)
 
-![Фотореалистичный кадр City Sample, отрендеренный через Movie Render Queue](docs/images/hero_render.png)
+![Демо ue5-vehicle-synth: машина едет, обретает 24-точечный скелет keypoints, затем едет дальше как wireframe-призрак](docs/videos/demo-hero.gif)
+
+> **Полное видео:** [`docs/videos/demo.mp4`](docs/videos/demo.mp4) - три сцены, в каждой одна машина едет обычной, затем со своим 24-точечным скелетом keypoints, затем как wireframe-призрак, в разных локациях и освещении. Отрендерено в City Sample через Movie Render Queue.
 
 ## Зачем
 
