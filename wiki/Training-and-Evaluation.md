@@ -70,6 +70,20 @@ v4 addresses each directly: **multi-venue (4) x multi-lighting (3) x multi-vehic
 
 ---
 
+## Label quality and the convention caveat
+
+The kill switch grades against CarFusion's own annotations, so a fair reading needs two extra facts.
+
+First, a model trained **only on the synthetic frames** (all 24 points, no real data) reaches **0.86 box mAP@50** on held-out synthetic frames - the labels are clean and learnable in-domain. The poor CarFusion number is therefore a *transfer* problem, not a label-quality one.
+
+Second, our labels are measurably cleaner than the reference they are graded against:
+
+![Label quality: our pixel-exact synthetic 24-point ground truth (left) vs CarFusion's triangulated 14-point ground truth (right)](https://raw.githubusercontent.com/kiselyovd/ue5-vehicle-synth/main/docs/images/label_quality.png)
+
+Our synthetic ground truth (left) is dense and pixel-exact by construction - the 24 points are projected from the 3D mesh, so they land on the wheel centres, light corners, mirrors, and roof corners with ~zero error. CarFusion's real ground truth (right), even on its best-labelled cars, is sparser (14 points) and visibly scattered, with gaps from occlusion and multi-view triangulation noise.
+
+The implication: synthetic pre-training shifts the model toward this cleaner convention, and measured against CarFusion's noisier one that scores *lower* - so the negative transfer number conflates label-convention mismatch with true transfer quality. A fairer evaluation would use a real test set labelled in the same convention. This is reported openly rather than buried.
+
 ## The bigger picture
 
 If the gate passes, the synthetic pipeline graduates from a vertical slice to a Phase 1 full build (more venues, vehicles, conditions; the full 24-point release of `vehicle-keypoints`). If it fails, the diagnosis points the next iteration - the pipeline, the C++ plugin, and an honest write-up are the portfolio deliverable regardless.

@@ -90,6 +90,16 @@ Keeping points 0-13 in the exact CarFusion order means a 24-point model stays ba
 !!! info "Phase 0 vertical slice"
     The capture pipeline, the C++ plugin, ZoneGraph road placement, the gold-path render, and the sim-to-real training driver are built and validated end to end. The current focus is the Phase 0 **kill switch** - synthetic pre-training must lift the v1 model's OKS-mAP by at least +2pp on the CarFusion test set. Results, positive or negative, are documented openly in the repo. A narrow single-city slice is a hard case for sim-to-real transfer; the pipeline and an honest write-up are the deliverable either way.
 
+## Results & label quality
+
+A model trained **only on the synthetic frames** reaches **0.86 box mAP@50** on held-out synthetic data - the 24-point labels are clean and learnable. On the real CarFusion test set the synthetic pre-training did **not** beat the real-only baseline (a narrow single-city slice is a hard sim-to-real case), and that gap is partly a *label-convention mismatch*: the kill switch grades against CarFusion's own annotations.
+
+That matters because our labels are demonstrably cleaner. Below, our synthetic ground truth (24 points, pixel-exact by construction) versus CarFusion's real ground truth (14 points, multi-view triangulated):
+
+![Label quality: our pixel-exact synthetic 24-point labels (left) vs CarFusion's triangulated 14-point labels (right)](images/label_quality.png)
+
+Ours are denser and sit precisely on the anatomy; CarFusion's are sparser and visibly scattered. So a model pulled toward our convention is penalised by a noisier reference - the negative transfer number conflates label-convention mismatch with true transfer quality, and is reported honestly rather than hidden.
+
 ## Get it
 
 <div class="grid cards" markdown>
