@@ -83,9 +83,18 @@ def main() -> None:
         if frames == 0:
             raise RuntimeError("no frames rendered")
         cmd = [
-            "ffmpeg", "-y", "-framerate", str(args.fps),
-            "-i", str(Path(td) / "%05d.png"),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
+            "ffmpeg",
+            "-y",
+            "-framerate",
+            str(args.fps),
+            "-i",
+            str(Path(td) / "%05d.png"),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            "18",
             str(out),
         ]
         subprocess.run(cmd, check=True)  # nosec B603 - fixed argv, local files only

@@ -33,8 +33,10 @@ WHEEL_R = 34.0  # wheel radius cm (hub height); spin rate = distance / (2*pi*R)
 
 
 _TRAFFIC_SPAWNERS = (
-    "BP_MassTrafficVehicleSpawner", "BP_MassTrafficIntersectionSpawner",
-    "BP_MassTrafficTrailerSpawner", "BP_MassCrowdSpawner",
+    "BP_MassTrafficVehicleSpawner",
+    "BP_MassTrafficIntersectionSpawner",
+    "BP_MassTrafficTrailerSpawner",
+    "BP_MassCrowdSpawner",
 )
 
 
@@ -92,10 +94,19 @@ def _smooth(t):
 
 def _road_z(world, x, y, hint, ignore):
     """Trace down at (x,y) for the road surface near `hint` z; falls back to hint."""
-    hits = unreal.SystemLibrary.line_trace_multi(
-        world, unreal.Vector(x, y, hint + 1000.0), unreal.Vector(x, y, hint - 800.0),
-        unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ignore, unreal.DrawDebugTrace.NONE, True,
-    ) or []
+    hits = (
+        unreal.SystemLibrary.line_trace_multi(
+            world,
+            unreal.Vector(x, y, hint + 1000.0),
+            unreal.Vector(x, y, hint - 800.0),
+            unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+            False,
+            ignore,
+            unreal.DrawDebugTrace.NONE,
+            True,
+        )
+        or []
+    )
     cands = []
     for h in hits:
         t = h.to_tuple()
@@ -175,11 +186,13 @@ def _mrq_render(seq, tag, n, fps, hardware_rt):
     cv = c.find_or_add_setting_by_class(unreal.MoviePipelineConsoleVariableSetting)
     cvars = {"r.MotionBlurQuality": 4.0}
     if not hardware_rt:  # Lumen software only - safe from the RTX 3080 D3D12 TDR
-        cvars.update({
-            "r.Lumen.HardwareRayTracing": 0.0,
-            "r.RayTracing.Shadows": 0.0,
-            "r.RayTracing.Reflections": 0.0,
-        })
+        cvars.update(
+            {
+                "r.Lumen.HardwareRayTracing": 0.0,
+                "r.RayTracing.Shadows": 0.0,
+                "r.RayTracing.Reflections": 0.0,
+            }
+        )
     for k, v in cvars.items():
         cv.add_or_update_console_variable(k, v)
     aa = c.find_or_add_setting_by_class(unreal.MoviePipelineAntiAliasingSetting)
@@ -195,8 +208,10 @@ def _mrq_render(seq, tag, n, fps, hardware_rt):
 
 
 _WHEEL_KEY = {
-    "Front_L": "Left_Front_wheel", "Front_R": "Right_Front_wheel",
-    "Rear_L": "Left_Back_wheel", "Rear_R": "Right_Back_wheel",
+    "Front_L": "Left_Front_wheel",
+    "Front_R": "Right_Front_wheel",
+    "Rear_L": "Left_Back_wheel",
+    "Rear_R": "Right_Back_wheel",
 }
 
 
@@ -208,8 +223,9 @@ def _hub_for(mesh_name, kpts):
     return None
 
 
-def render_drive(P, yaw, rig, rig_config, tag, n=150, fps=30, hardware_rt=False, light=None,
-                 hide_car=False):
+def render_drive(
+    P, yaw, rig, rig_config, tag, n=150, fps=30, hardware_rt=False, light=None, hide_car=False
+):
     """Keyframe the rig driving + spinning wheels + an anchored chase camera; MRQ-render.
 
     hide_car=True renders the environment only (car meshes hidden) so a skeleton
@@ -218,10 +234,12 @@ def render_drive(P, yaw, rig, rig_config, tag, n=150, fps=30, hardware_rt=False,
     base = rig.get_actor_location()
     eas = cap._eas()
     world = cap._world()
-    ignore = [a for a in eas.get_all_level_actors()
-              if a.get_actor_label().startswith(("VK_Rig", "VKR_"))]
-    frames = drive_frames(base, P.z, yaw, n,
-                          road_z_fn=lambda x, y, hint: _road_z(world, x, y, hint, ignore))
+    ignore = [
+        a for a in eas.get_all_level_actors() if a.get_actor_label().startswith(("VK_Rig", "VKR_"))
+    ]
+    frames = drive_frames(
+        base, P.z, yaw, n, road_z_fn=lambda x, y, hint: _road_z(world, x, y, hint, ignore)
+    )
 
     eas = cap._eas()
     cam = eas.spawn_actor_from_class(unreal.CameraActor, P, unreal.Rotator(0, 0, 0))
@@ -243,7 +261,9 @@ def render_drive(P, yaw, rig, rig_config, tag, n=150, fps=30, hardware_rt=False,
     if unreal.EditorAssetLibrary.does_directory_exist("/Game/VK_Temp"):
         unreal.EditorAssetLibrary.delete_directory("/Game/VK_Temp")
     seq = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
-        f"VK_Drive_{tag}", "/Game/VK_Temp", unreal.LevelSequence,
+        f"VK_Drive_{tag}",
+        "/Game/VK_Temp",
+        unreal.LevelSequence,
         unreal.LevelSequenceFactoryNew(),
     )
     seq.set_display_rate(unreal.FrameRate(fps, 1))
@@ -313,10 +333,12 @@ def project_drive(rig_config, venue, light, n=150):
     base = rig.get_actor_location()
     eas = cap._eas()
     world = cap._world()
-    ignore = [a for a in eas.get_all_level_actors()
-              if a.get_actor_label().startswith(("VK_Rig", "VKR_"))]
-    frames = drive_frames(base, P.z, yaw, n,
-                          road_z_fn=lambda x, y, hint: _road_z(world, x, y, hint, ignore))
+    ignore = [
+        a for a in eas.get_all_level_actors() if a.get_actor_label().startswith(("VK_Rig", "VKR_"))
+    ]
+    frames = drive_frames(
+        base, P.z, yaw, n, road_z_fn=lambda x, y, hint: _road_z(world, x, y, hint, ignore)
+    )
     _r, ann, names = None, None, None
     # build_scene already built the rig + annotator is on it; refetch the annotator
     # by rebuilding is wasteful, so grab it from the rig's subobjects instead.
