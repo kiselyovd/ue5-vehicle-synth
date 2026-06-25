@@ -67,6 +67,13 @@ Synthetic pre-training / augmentation for real-world vehicle-keypoint models
 (sim-to-real). It is a **Phase-0 vertical slice**: the focus is the pipeline and
 a proof-of-concept sample, not a final large-scale corpus.
 
+## Used by
+
+- [Synthetic 24-pt model](https://huggingface.co/kiselyovd/citysample-vehicle-keypoints-24pt) -
+  a YOLO-pose model trained entirely on this synthetic data (the in-domain model).
+- [Real CarFusion model](https://huggingface.co/kiselyovd/vehicle-keypoints) -
+  the real-world baseline the sim-to-real study compares against.
+
 ## Honest status
 
 This slice was built to test a kill switch: *does synthetic pre-training improve
