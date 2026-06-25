@@ -125,7 +125,7 @@ void FSynthCOCOExporter::End()
     TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
 
     TSharedPtr<FJsonObject> Info = MakeShared<FJsonObject>();
-    Info->SetStringField(TEXT("description"), FString::Printf(TEXT("UE5 vehicle synthetic keypoints — %s"), *DatasetName));
+    Info->SetStringField(TEXT("description"), FString::Printf(TEXT("UE5 vehicle synthetic keypoints - %s"), *DatasetName));
     Info->SetStringField(TEXT("version"), TEXT("0.1.0"));
     Info->SetNumberField(TEXT("year"), FDateTime::Now().GetYear());
     Info->SetStringField(TEXT("contributor"), TEXT("kiselyovd"));

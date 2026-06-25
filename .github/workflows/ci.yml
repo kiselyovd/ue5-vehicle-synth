@@ -87,7 +87,7 @@ jobs:
             git reset --hard origin/badges
           else
             echo "Bootstrapping badges branch"
-            printf 'Badge artifacts for shields.io endpoint. Do not edit manually — CI updates this branch.\n' > README.md
+            printf 'Badge artifacts for shields.io endpoint. Do not edit manually - CI updates this branch.\n' > README.md
             git add README.md
           fi
           cp "$GITHUB_WORKSPACE/coverage.json" coverage.json

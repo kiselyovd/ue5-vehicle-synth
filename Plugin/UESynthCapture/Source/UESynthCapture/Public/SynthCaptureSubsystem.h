@@ -63,6 +63,6 @@ private:
     int32 NextImageId = 1;
     int32 NextAnnotationId = 1;
 
-    // Owned writer to coco.json — minimal struct, not a UObject
+    // Owned writer to coco.json - minimal struct, not a UObject
     TUniquePtr<class FSynthCOCOExporter> Exporter;
 };

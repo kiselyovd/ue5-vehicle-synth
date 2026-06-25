@@ -6,7 +6,7 @@ import sys
 
 
 def main() -> int:
-    print("ue5-vehicle-synth — use make test / make lint / make docs")
+    print("ue5-vehicle-synth - use make test / make lint / make docs")
     return 0
 
 

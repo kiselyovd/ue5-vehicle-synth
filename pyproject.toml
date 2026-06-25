@@ -83,8 +83,8 @@ exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedE
 exclude_dirs = ["tests", "notebooks", "data", "artifacts"]
 # B101: assert_used (pytest convention)
 # B404/B603: subprocess used with a fixed argument list (no user input) in aggregate_v4.py
-# B112: try/except/continue in UE editor capture loop — intentional resilience pattern
-# B701: jinja2_autoescape_false — templates render Markdown/YAML, not HTML
+# B112: try/except/continue in UE editor capture loop - intentional resilience pattern
+# B701: jinja2_autoescape_false - templates render Markdown/YAML, not HTML
 skips = ["B101", "B404", "B603", "B112", "B701"]
 
 [tool.interrogate]
@@ -118,7 +118,7 @@ DEP002 = [
   "pydantic",
 ]
 # DEP001: editor-only UE Python API and co-located helper modules are not
-# installable packages — they live in the UE editor environment.
+# installable packages - they live in the UE editor environment.
 DEP001 = [
   "unreal",
   "ue_lighting",
