@@ -123,6 +123,7 @@ DEP001 = [
   "unreal",
   "ue_lighting",
   "ue_capture_batch",
+  "ue_capture_v4",
   "ue_zonegraph",
   "zonegraph_sampling",
 ]
