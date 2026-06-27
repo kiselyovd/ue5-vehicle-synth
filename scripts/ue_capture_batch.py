@@ -25,12 +25,14 @@ import math
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Any
 
 import unreal  # editor-only, not resolvable outside the editor
 
-CONFIG = "D:/Projects/GitHub/ue5-vehicle-synth/configs/vehicles/citysample_vehCar_vehicle13.json"
-OUT_DIR = "D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0_v2"
+_REPO = Path(__file__).resolve().parent.parent  # ue5-vehicle-synth/
+CONFIG = str(_REPO / "configs" / "vehicles" / "citysample_vehCar_vehicle13.json")
+OUT_DIR = str(_REPO / "captures" / "phase0_v2")
 IMG_W, IMG_H = 1280, 720
 FOV = 90.0
 EXPOSURE_EV = 8.0
@@ -50,7 +52,7 @@ RIGS_V4 = [
     # 2-3 more chosen in Task 7 from the 12 derived configs
 ]
 LIGHTING_V4 = ["day_clear", "sunset", "overcast"]
-OUT_DIR_V4 = "D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0_v4"
+OUT_DIR_V4 = str(_REPO / "captures" / "phase0_v4")
 
 # Module-level cache for discovered world vehicle INSTANCES (populated on first call)
 # City Sample parks cars as InstancedStaticMesh instances on manager actors

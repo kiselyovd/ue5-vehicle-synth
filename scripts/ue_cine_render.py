@@ -27,7 +27,7 @@ import ue_capture_v4 as cap
 import ue_lighting
 
 IMG_W, IMG_H, FOV = 1920, 1080, 60.0
-OUT_ROOT = "D:/Projects/GitHub/ue5-vehicle-synth/video_build/cine"
+OUT_ROOT = str(Path(__file__).resolve().parent.parent / "video_build" / "cine")
 TRAVEL = 3000.0  # cm of forward travel over the clip (shared by motion + wheel spin)
 WHEEL_R = 34.0  # wheel radius cm (hub height); spin rate = distance / (2*pi*R)
 

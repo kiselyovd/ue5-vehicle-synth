@@ -15,7 +15,8 @@ from pathlib import Path
 
 from huggingface_hub import HfApi
 
-CAPTURES = Path("D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0_v4")
+_REPO = Path(__file__).resolve().parent.parent  # ue5-vehicle-synth/
+CAPTURES = _REPO / "captures" / "phase0_v4"
 
 CARD = """---
 license: mit

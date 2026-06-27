@@ -9,9 +9,12 @@ only the render-submit call is finalized there.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import unreal  # noqa: F401
 
-OUTPUT_DIR = "D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0_v4"
+_REPO = Path(__file__).resolve().parent.parent  # ue5-vehicle-synth/
+OUTPUT_DIR = str(_REPO / "captures" / "phase0_v4")
 RES = (1280, 720)
 
 

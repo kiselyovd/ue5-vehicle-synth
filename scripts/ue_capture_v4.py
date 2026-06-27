@@ -32,7 +32,8 @@ import ue_lighting
 import ue_zonegraph
 
 IMG_W, IMG_H, FOV = 1280, 720, 90.0
-OUT_ROOT = "D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0_v4"
+_REPO = Path(__file__).resolve().parent.parent  # ue5-vehicle-synth/
+OUT_ROOT = str(_REPO / "captures" / "phase0_v4")
 _BODY_MESH_RE = None  # set lazily
 
 
@@ -44,19 +45,23 @@ def _world():
     return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
 
 
-def _disable_hlod_proxies():
-    """Disable every WorldPartitionHLOD proxy (collision off + hide, in-memory only).
-
-    At distant venues the real WP cell streams in via load_actors, but the HLOD proxy
-    "fake ground" stays present ABOVE the real road (~45 cm here) WITH collision, so a
-    downward road trace hits the proxy instead of the asphalt -> the rig seats too high
-    and floats in the MRQ render (which uses the real streamed road). Disabling the
-    proxies lets the trace reach the real GROUND_ mesh. Never saved - reapply per setup."""
+def _disable_hlod_proxies(center=None, hide_radius_cm=10000.0):
+    """Collision off on every HLOD proxy (so the road trace reaches the real
+    asphalt, not the proxy "fake ground" above it), but only HIDE the proxies near
+    the venue. Distant HLOD is kept visible so it still renders as the city
+    backdrop - hiding all of it (the old behaviour) left an empty background.
+    In-memory only, never saved; reapply per setup."""
     eas = _eas()
     n = 0
     for a in eas.get_all_level_actors():
         if isinstance(a, unreal.WorldPartitionHLOD) or "HLOD" in a.get_actor_label():
             a.set_actor_enable_collision(False)
+            if center is not None:
+                o, e = a.get_actor_bounds(False)  # distance from venue to the proxy bounds
+                dx = max(0.0, abs(o.x - center.x) - e.x)
+                dy = max(0.0, abs(o.y - center.y) - e.y)
+                if dx * dx + dy * dy > hide_radius_cm * hide_radius_cm:
+                    continue  # distant proxy -> keep visible as backdrop
             a.set_is_temporarily_hidden_in_editor(True)
             n += 1
     return n
@@ -232,6 +237,71 @@ def orbit_poses(P, n_azim=16, dists=(500.0, 750.0), heights=(175.0, 255.0, 340.0
     return poses
 
 
+def _hit_dist(world, a, b):
+    """Distance from a to the first collision hit on segment a->b, or None if the
+    segment is clear. Used to detect a camera jammed against a wall/fence."""
+    hit = unreal.SystemLibrary.line_trace_single(
+        world, a, b, unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [],
+        unreal.DrawDebugTrace.NONE, True)
+    if not hit:
+        return None
+    return (hit.to_tuple()[5] - a).length()  # impact_point distance from a
+
+
+def _camera_clear(world, loc, look_at, min_clear_cm=140.0):
+    """Reject a camera embedded in / jammed against geometry. Trace from the camera
+    toward the rig: the intended foreground occluder sits ~250cm away (the gap we
+    leave), so the first hit must be beyond min_clear_cm. A hit closer than that is a
+    wall/fence right at the lens (the degenerate 'red grid' pose) -> reject."""
+    d = _hit_dist(world, loc, look_at)
+    return d is None or d > min_clear_cm
+
+
+def occluder_poses(P, parked_xy, per_occluder=2, near_cm=300.0, far_cm=1200.0, height=180.0):
+    """Hard-case poses: a parked vehicle in the FOREGROUND partly occludes the rig -
+    the partial-visibility regime real footage is full of but clean orbits lack. For
+    each parked car Q near the rig, place the camera on the far side of Q (along the
+    rig->Q ray) looking back at the rig, so Q blocks part of the view. The rig itself
+    stays clear of Q (collision avoidance); only the sightline is occluded. Candidate
+    camera positions jammed against a wall/fence are dropped (camera-clearance check)."""
+    world = _world()
+    poses = []
+    look_at = unreal.Vector(P.x, P.y, P.z + 70.0)
+    for ox, oy in parked_xy:
+        dx, dy = ox - P.x, oy - P.y
+        dist = math.hypot(dx, dy)
+        if not (near_cm < dist < far_cm):  # only cars close enough to occlude
+            continue
+        ux, uy = dx / dist, dy / dist
+        for k in range(per_occluder):
+            d = dist + 250.0 + 250.0 * k  # camera beyond Q, so Q is in the foreground
+            loc = unreal.Vector(P.x + ux * d, P.y + uy * d, P.z + height)
+            if not _camera_clear(world, loc, look_at):
+                continue  # camera lands inside/against a wall or fence
+            poses.append((loc, unreal.MathLibrary.find_look_at_rotation(loc, look_at)))
+    return poses
+
+
+def truncation_poses(P, n=6, dist=430.0, height=150.0, offset_frac=0.5):
+    """Hard-case poses: a close camera aimed slightly off the rig, so the car is
+    truncated at the image edge / only partly in frame. Camera positions jammed
+    against geometry are dropped (same camera-clearance check as occluder poses)."""
+    world = _world()
+    rig = unreal.Vector(P.x, P.y, P.z + 70.0)
+    poses = []
+    for i in range(n):
+        az = 2.0 * math.pi * i / n
+        loc = unreal.Vector(P.x + math.cos(az) * dist, P.y + math.sin(az) * dist, P.z + height)
+        if not _camera_clear(world, loc, rig):
+            continue  # camera lands inside/against a wall or fence
+        side = (-math.sin(az), math.cos(az))  # perpendicular -> aim past the car edge
+        aim = unreal.Vector(
+            P.x + side[0] * dist * offset_frac, P.y + side[1] * dist * offset_frac, P.z + 70.0
+        )
+        poses.append((loc, unreal.MathLibrary.find_look_at_rotation(loc, aim)))
+    return poses
+
+
 def _kpts_from_res(res, names):
     return [
         {
@@ -244,8 +314,41 @@ def _kpts_from_res(res, names):
     ]
 
 
-def pick_street_lane(cx, cy, radius=3000.0):
-    """Return (P, yaw) for the nearest drivable street lane to (cx, cy), or None."""
+# Minimum distance (cm) from the rig spawn to any parked City Sample vehicle. The
+# rig is a ~500 cm car, parked cars are ~500 cm; ~350 cm centre-to-centre keeps the
+# bodies from interpenetrating ("car-in-car"). Tune up for trucks/buses.
+RIG_CLEARANCE_CM = 350.0
+
+# Minimum number of ACTUALLY VISIBLE (v==2) rig keypoints required to keep a pose.
+# Hard-case poses deliberately occlude the rig, but a frame where the car is fully
+# hidden behind a fence/wall (the degenerate "red grid" pose) is a wasted render and
+# is dropped at export anyway - skip it BEFORE keyframing so MRQ never renders it.
+MIN_VISIBLE_KP = 4
+
+
+def _parked_xy(cx, cy, radius_cm=6000.0):
+    """World (x, y) of parked City Sample vehicles near the venue, used to keep the
+    rig from spawning inside one. Reuses the same ISM discovery as labelling."""
+    try:
+        import ue_capture_batch
+
+        ue_capture_batch.VENUE = unreal.Vector(cx, cy, 0.0)
+        ue_capture_batch._WORLD_VEHICLE_CACHE = None
+        return [
+            (loc[0], loc[1])
+            for (_t, _c, loc, _r) in ue_capture_batch.discover_world_vehicles(radius_cm=radius_cm)
+        ]
+    except Exception as e:  # discovery is best-effort; fall back to no clearance
+        unreal.log_warning(f"parked-vehicle discovery for clearance failed: {e}")
+        return []
+
+
+def pick_street_lane(cx, cy, radius=3000.0, obstacles=None, min_clear_cm=RIG_CLEARANCE_CM):
+    """Return (P, yaw) for the nearest drivable street lane to (cx, cy) that is at
+    least `min_clear_cm` from every obstacle (parked vehicle), or None if there is no
+    lane at all. Skipping lane points that sit on top of a parked car prevents the
+    rig from being spawned overlapping one (the 'car-in-car' rendering artifact)."""
+    obstacles = obstacles or []
     lanes = [
         p
         for p in ue_zonegraph.query_lane_points(unreal.Vector(cx, cy, 0), radius)
@@ -254,10 +357,18 @@ def pick_street_lane(cx, cy, radius=3000.0):
     if not lanes:
         return None
     lanes.sort(key=lambda p: (p.position[0] - cx) ** 2 + (p.position[1] - cy) ** 2)
+    c2 = min_clear_cm * min_clear_cm
+    for lp in lanes:
+        x, y = lp.position[0], lp.position[1]
+        if all((x - ox) ** 2 + (y - oy) ** 2 > c2 for ox, oy in obstacles):
+            P = unreal.Vector(*lp.position)
+            return P, math.degrees(math.atan2(lp.tangent[1], lp.tangent[0]))
+    unreal.log_warning(
+        f"no lane point clear of {len(obstacles)} parked vehicles within {radius:.0f}cm; "
+        "using nearest lane (rig may overlap a parked car)"
+    )
     lp = lanes[0]
-    P = unreal.Vector(*lp.position)
-    yaw = math.degrees(math.atan2(lp.tangent[1], lp.tangent[0]))
-    return P, yaw
+    return unreal.Vector(*lp.position), math.degrees(math.atan2(lp.tangent[1], lp.tangent[0]))
 
 
 def _project_px(cam, world_pt):
@@ -302,7 +413,9 @@ def _project_bbox_px(cam, corners):
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
-def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_instances=True):
+def setup_and_project(
+    venue, light_name, rig_config, group_tag, n_azim=16, with_instances=True, hard_cases=True
+):
     """Phase A: build the scene, project every pose, keyframe the camera, write JSONL.
 
     venue = (cx, cy) target; the rig is placed on the nearest street lane. Returns
@@ -311,8 +424,10 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     world = _world()
     cx, cy = venue[0], venue[1]
     wp = unreal.WorldPartitionBlueprintLibrary
+    # load a wide box of real cells so the surrounding city renders (not just the
+    # rig's own cell); distant HLOD fills the rest of the backdrop.
     box = unreal.Box(
-        unreal.Vector(cx - 4000, cy - 4000, -4000), unreal.Vector(cx + 4000, cy + 4000, 6000)
+        unreal.Vector(cx - 9000, cy - 9000, -4000), unreal.Vector(cx + 9000, cy + 9000, 6000)
     )
     # WorldPartition queries can transiently return None right after a PIE render
     # teardown; retry until the descriptor list resolves.
@@ -323,14 +438,16 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
             break
         time.sleep(1.0)
     wp.load_actors([d.guid for d in (descs or [])])
-    _disable_hlod_proxies()
+    _disable_hlod_proxies(unreal.Vector(cx, cy, 0.0))
     if light_name:
         try:
             ue_lighting.apply_lighting(light_name)
         except Exception as e:  # best-effort; keep the level's default lighting
             unreal.log_warning(f"lighting '{light_name}' not applied: {e}")
 
-    site = pick_street_lane(cx, cy)
+    # discover parked vehicles first so the rig is placed clear of them
+    parked = _parked_xy(cx, cy)  # used for clearance AND foreground-occluder poses
+    site = pick_street_lane(cx, cy, obstacles=parked)
     if site is None:
         raise RuntimeError(f"no street lane near venue {venue}")
     P, yaw = site
@@ -365,6 +482,9 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     rig_corners = _rig_aabb_corners(rig_parts)
 
     poses = orbit_poses(P, n_azim=n_azim)
+    if hard_cases:
+        # add partial-visibility variety: foreground-occluder + truncation poses
+        poses = poses + occluder_poses(P, parked) + truncation_poses(P)
 
     # Level sequence: one camera, keyframed transform (constant), camera cut [0,N)
     if unreal.EditorAssetLibrary.does_directory_exist("/Game/VK_Temp"):
@@ -377,29 +497,38 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
     )
     seq.set_display_rate(unreal.FrameRate(24, 1))
     seq.set_playback_start(0)
-    seq.set_playback_end(len(poses))
-    binding = seq.add_possessable(cam)
+    # Use a SPAWNABLE camera, not a possessable: a possessable binding does not
+    # resolve in Movie Render Queue's PIE world (MRQ then falls back to a default
+    # camera and the rig is never framed), whereas the sequence spawns its own
+    # camera and the camera cut binds reliably.
+    binding = seq.add_spawnable_from_instance(cam)
     ttrack = binding.add_track(unreal.MovieScene3DTransformTrack)
     tsec = ttrack.add_section()
-    tsec.set_range(0, len(poses))
     ch = tsec.get_all_channels()
     cut = seq.add_track(unreal.MovieSceneCameraCutTrack)
     cs = cut.add_section()
-    cs.set_range(0, len(poses))
-    cs.set_camera_binding_id(unreal.MovieSceneSequenceExtensions.get_binding_id(seq, binding))
+    cam_bid = unreal.MovieSceneObjectBindingID()
+    cam_bid.set_editor_property("guid", binding.get_id())
+    cs.set_camera_binding_id(cam_bid)
 
     out_dir = f"{OUT_ROOT}/{group_tag}"
     os.makedirs(out_dir, exist_ok=True)
     lines = []
-    for i, (loc, look) in enumerate(poses):
+    # Project EVERY candidate pose first; keep only those where the rig is genuinely
+    # visible (>= MIN_VISIBLE_KP keypoints at v==2), then keyframe the kept poses with
+    # a CONTIGUOUS index j so MRQ frame numbers line up with the JSONL `file`/`frame`.
+    j = 0
+    for loc, look in poses:
         cam.set_actor_location(loc, False, False)
         cam.set_actor_rotation(look, False)
-        # keyframe this pose (constant interp -> sharp still per frame)
-        _key_transform(ch, i, loc, look)
         # rig instance: bbox from the real mesh-part union projected this pose
         res = ann.capture_points(cc, IMG_W, IMG_H)
+        rig_kpts = _kpts_from_res(res, names)
+        n_vis = sum(1 for k in rig_kpts if k["v"] == 2)
+        if n_vis < MIN_VISIBLE_KP:
+            continue  # rig fully/near-fully hidden -> useless frame, never render it
         rig_bb = _project_bbox_px(cam, rig_corners)
-        instances = [_instance_record(_kpts_from_res(res, names), rig_bb)]
+        instances = [_instance_record(rig_kpts, rig_bb)]
         # city vehicle instances: the probe holds no mesh, so its mesh-bbox would be
         # degenerate - fall back to the keypoint hull (bb=None) in the converter.
         for probe, wv_ann, wv_names, xform in inst_anns:
@@ -408,16 +537,17 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
             rec = _instance_record(_kpts_from_res(wres, wv_names), None)
             if rec is not None and sum(1 for k in rec["keypoints"] if k[2] > 0) >= 2:
                 instances.append(rec)
-        rec0 = instances[0]
-        if rec0 is None:
+        if instances[0] is None:
             continue
+        # keyframe this kept pose (constant interp -> sharp still per frame)
+        _key_transform(ch, j, loc, look)
         lines.append(
             json.dumps(
                 {
-                    "file": f"{group_tag}.{i:04d}.png",
-                    "frame": i,
+                    "file": f"{group_tag}.{j:04d}.png",
+                    "frame": j,
                     "rig_yaw": yaw,
-                    "cam": i,
+                    "cam": j,
                     "width": IMG_W,
                     "height": IMG_H,
                     "venue": str(venue),
@@ -426,14 +556,21 @@ def setup_and_project(venue, light_name, rig_config, group_tag, n_azim=16, with_
                 }
             )
         )
+        j += 1
 
+    # Size the sequence to the KEPT pose count (not the candidate count), so MRQ
+    # renders exactly j frames numbered 0..j-1.
+    seq.set_playback_end(j)
+    tsec.set_range(0, j)
+    cs.set_range(0, j)
     unreal.EditorAssetLibrary.save_asset(seq.get_path_name())
     jsonl = f"{out_dir}/captures.jsonl"
     open(jsonl, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     return {
         "seq": seq.get_path_name(),
         "jsonl": jsonl,
-        "n_poses": len(poses),
+        "n_poses": j,
+        "n_candidates": len(poses),
         "map": world.get_path_name(),
         "out_dir": out_dir,
         "site": (P.x, P.y, P.z, yaw),
@@ -546,3 +683,35 @@ def render_group(info, group_tag, quality="lite"):
     os.makedirs(f"{info['out_dir']}/rgb", exist_ok=True)
     qsub.render_queue_with_executor_instance(unreal.MoviePipelinePIEExecutor())
     return f"{info['out_dir']}/rgb"
+
+
+# Config dir resolved relative to this file so build_rig can json.load it
+# regardless of the editor's working directory.
+_CFG_DIR = str(_REPO / "configs" / "vehicles")
+
+
+def trial(venue_idx=0, vehicle="citysample_vehCar_vehicle13", tag="trial_hard", n_azim=6):
+    """Small in-editor trial of the new collision-avoidance + hard-case poses, to
+    eyeball before a full re-capture. One venue, one vehicle, day lighting, few
+    orbit azimuths, hard_cases on. Run via MCP:
+
+        import ue_capture_v4 as c
+        info = c.trial()            # builds scene + projects poses -> JSONL
+        c.render_group(info, "trial_hard")   # async MRQ render to PNGs
+
+    Then inspect captures/phase0_v4/trial_hard/rgb + captures.jsonl. The poses
+    include orbit (clean), occluder (parked car in foreground), and truncation
+    (car at frame edge) cases; the rig is placed clear of parked cars."""
+    import os
+
+    sys.path.insert(0, os.path.dirname(__file__))
+    import ue_capture_batch as ucb
+
+    v = ucb.VENUES_V4[venue_idx]
+    center = (v["center"].x, v["center"].y)  # setup_and_project takes (cx, cy)
+    rig_config = f"{_CFG_DIR}/{vehicle}.json"
+    info = setup_and_project(
+        center, "day_clear", rig_config, tag, n_azim=n_azim, with_instances=True, hard_cases=True
+    )
+    unreal.log(f"trial setup done: {info['n_poses']} poses -> {info['jsonl']}")
+    return info

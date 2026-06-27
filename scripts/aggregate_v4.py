@@ -13,7 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path("D:/Projects/GitHub/ue5-vehicle-synth/captures/phase0_v4")
+_REPO = Path(__file__).resolve().parent.parent  # ue5-vehicle-synth/
+ROOT = _REPO / "captures" / "phase0_v4"
 GRID_RE = re.compile(r"^g\d\d_v\d_")  # only the 12 grid groups, not the test ones
 
 merged = ROOT / "captures_all.jsonl"
@@ -48,5 +49,5 @@ subprocess.run(
         "phase0-v4",
     ],
     check=True,
-    cwd="D:/Projects/GitHub/ue5-vehicle-synth",
+    cwd=str(_REPO),
 )

@@ -36,16 +36,25 @@ def query_lane_points(
     """Return LanePoses on drivable lanes within radius_cm of center.
 
     Uses the C++ ZoneGraph wrapper first (real lanes with travel direction),
-    dropping lanes narrower than min_lane_width_cm (pedestrian/crosswalk lanes).
-    Falls back to road-surface raycasting when ZoneGraph yields nothing.
+    dropping lanes narrower than min_lane_width_cm (pedestrian/crosswalk lanes)
+    and lanes whose Z is far from the ground beneath them (ZoneGraph data is
+    sometimes authored at a proxy/elevated height). Falls back to road-surface
+    raycasting when ZoneGraph yields no usable lane.
     """
     world = _world()
+    # Street level at the venue centre, so we can reject ZoneGraph lanes that
+    # belong to an elevated overpass / ramp passing nearby (their Z is far above
+    # the street the rig sits on).
+    ref = _trace_down(world, center.x, center.y)
+    ref_z = ref[0].z if ref else None
     samples = unreal.SynthRoadQuery.query_zone_graph_lanes(world, center, radius_cm)
     poses: list[LanePose] = []
     for s in samples:
         if s.width < min_lane_width_cm:
             continue
         p, d = s.position, s.direction
+        if ref_z is not None and abs(p.z - ref_z) > 300.0:
+            continue  # different deck (overpass/underpass) than the venue street
         poses.append(LanePose(position=(p.x, p.y, p.z), tangent=(d.x, d.y, d.z)))
     if poses:
         return poses

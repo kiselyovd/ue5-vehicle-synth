@@ -13,11 +13,13 @@ from __future__ import annotations
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import unreal  # editor-only, not resolvable outside the editor
 
-CONFIGS_DIR = "D:/Projects/GitHub/ue5-vehicle-synth/configs/vehicles"
+_REPO = Path(__file__).resolve().parent.parent  # ue5-vehicle-synth/
+CONFIGS_DIR = str(_REPO / "configs" / "vehicles")
 SKIP_TYPE = "vehCar_vehicle13"
 
 # Keypoint schema order (must match EXTENDED_KEYPOINT_NAMES in schema.py)
