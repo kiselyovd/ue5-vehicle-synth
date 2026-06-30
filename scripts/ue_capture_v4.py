@@ -508,14 +508,13 @@ def setup_and_project(
         except Exception as e:  # grading is best-effort
             unreal.log_warning(f"camera grade '{light_name}' not applied: {e}")
 
-    inst_anns = _instance_annotators(cx, cy) if with_instances else []
+    _grp_seed = abs(hash(group_tag)) % (2**31)
+    inst_anns = _instance_annotators(cx, cy, seed=_grp_seed) if with_instances else []
     if with_instances:
         # add labelled "traffic": random vehicles spawned along the ZoneGraph lanes,
         # so frames vary per group without the unlabelled Mass traffic (which would be
         # negative supervision). Seeded by group_tag for reproducible-but-varied runs.
-        inst_anns += _lane_traffic_annotators(
-            cx, cy, P, parked, n=14, seed=abs(hash(group_tag)) % (2**31)
-        )
+        inst_anns += _lane_traffic_annotators(cx, cy, P, parked, n=14, seed=_grp_seed + 1)
 
     # Cache the rig's mesh-part AABB corners once (rig is static through the orbit) so
     # the per-pose bbox is the projection of the real car mesh, not the phantom
@@ -652,9 +651,11 @@ def _key_transform(ch, frame, loc, rot):
         ch[k].add_key(fn, vals[k], interpolation=C)
 
 
-def _instance_annotators(cx, cy, radius=6000.0):
+def _instance_annotators(cx, cy, seed=0, radius=6000.0):
     """Discover City Sample ISM vehicle instances near the venue and build one probe
-    annotator per instance (teleported per pose). Returns list of
+    annotator per instance (teleported per pose), spawning a randomised-type body-mesh
+    copy at each so the labelled car renders in MRQ. `seed` makes the per-position type
+    choice reproducible-but-varied per group. Returns list of
     (probe_actor, annotator, schema_names, instance_transform)."""
     try:
         import ue_capture_batch
@@ -667,13 +668,41 @@ def _instance_annotators(cx, cy, radius=6000.0):
     except Exception as e:  # discovery is best-effort
         unreal.log_warning(f"instance discovery failed: {e}")
         return []
+    import glob
+    import random as _random
+
+    rng = _random.Random(seed)  # nosec B311 - scene variety, not cryptographic
+    world = _world()
     eas = _eas()
-    out = []
-    for idx, (wv_type, wv_config_path, loc, rot) in enumerate(world_insts):
+    # Randomise type for variety, but only among car/van-sized vehicles: City Sample's
+    # parking slots are sized for the original car, so dropping a giant articulated bus
+    # or box truck into a compact slot makes it intrude into the camera orbit / rig
+    # (huge body fills the frame). Cars and vans fit any slot.
+    cfgs = sorted(
+        g
+        for g in glob.glob(f"{_CFG_DIR}/citysample_*.json")
+        if "vehBus" not in g and "vehTruck" not in g
+    )
+    out: list = []
+    for idx, (_wv_type, _wv_cfg_path, loc, rot) in enumerate(world_insts):
+        # Spawn a REAL body-mesh copy at the discovered position so the labelled car
+        # actually renders in MRQ. City Sample's parked cars are Mass-spawned at runtime
+        # in the PIE world (BP_MassTrafficParkedVehicleSpawner) and do NOT match the editor
+        # ISM previews we discover, so without our own copy the label sits on empty ground.
+        # The TYPE is randomised per position (seeded by the group) for variety -> the car
+        # must be ground-snapped since a different type has a different origin height.
+        cfg_path = rng.choice(cfgs)
         try:
-            wv_cfg = json.load(open(wv_config_path, encoding="utf-8"))
+            wv_cfg = json.load(open(cfg_path, encoding="utf-8"))
         except Exception:
             continue
+        type_id = os.path.basename(cfg_path)[len("citysample_") : -len(".json")]
+        body = unreal.EditorAssetLibrary.load_asset(f"/Game/Vehicle/{type_id}/Mesh/SM_{type_id}")
+        if body is None:
+            continue
+        # road Z under the slot BEFORE spawning (ISM cars have no collision so the trace
+        # passes through to the asphalt; trace after spawn would hit our own car's roof)
+        ref = ue_zonegraph._trace_down(world, loc[0], loc[1])
         probe = eas.spawn_actor_from_class(
             unreal.Actor, unreal.Vector(0, 0, -100000), unreal.Rotator(0, 0, 0)
         )
@@ -684,21 +713,20 @@ def _instance_annotators(cx, cy, radius=6000.0):
             "local_point_by_schema_name",
             {k: unreal.Vector(*v) for k, v in wv_cfg["keypoints"].items()},
         )
-        xform = unreal.Transform(unreal.Vector(*loc), unreal.Rotator(*rot), unreal.Vector(1, 1, 1))
-        # Spawn a REAL body-mesh copy at the instance so the labelled car actually
-        # renders in MRQ. City Sample's parked cars are Mass-spawned at runtime in the
-        # PIE world (BP_MassTrafficParkedVehicleSpawner) and do NOT match the editor ISM
-        # previews we discover, so without our own copy the label sits on empty ground.
-        body = unreal.EditorAssetLibrary.load_asset(f"/Game/Vehicle/{wv_type}/Mesh/SM_{wv_type}")
-        if body is not None:
-            car = eas.spawn_actor_from_class(
-                unreal.StaticMeshActor, xform.translation, xform.rotation.rotator()
+        car = eas.spawn_actor_from_class(
+            unreal.StaticMeshActor, unreal.Vector(*loc), unreal.Rotator(*rot)
+        )
+        car.set_actor_label(f"VK_CityCar_{idx}")
+        smc = car.static_mesh_component
+        smc.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+        smc.set_static_mesh(body)
+        if ref is not None:  # seat wheels on the road for the swapped-in type
+            origin, ext = car.get_actor_bounds(False)
+            cl = car.get_actor_location()
+            car.set_actor_location(
+                unreal.Vector(cl.x, cl.y, cl.z + (ref[0].z - (origin.z - ext.z))), False, False
             )
-            car.set_actor_label(f"VK_CityCar_{idx}")
-            smc = car.static_mesh_component
-            smc.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
-            smc.set_static_mesh(body)
-        out.append((probe, wv_ann, list(wv_cfg["keypoints"].keys()), xform))
+        out.append((probe, wv_ann, list(wv_cfg["keypoints"].keys()), car.get_actor_transform()))
     return out
 
 
@@ -865,7 +893,7 @@ def render_group(info, group_tag, quality="lite"):
         "wp.Runtime.OverrideRuntimeSpatialHashLoadingRange.Grid0", 12000.0
     )
     aa = c.find_or_add_setting_by_class(unreal.MoviePipelineAntiAliasingSetting)
-    aa.set_editor_property("engine_warm_up_count", 48)
+    aa.set_editor_property("engine_warm_up_count", 16)
     aa.set_editor_property("use_camera_cut_for_warm_up", True)
     if quality == "lite":
         aa.set_editor_property("spatial_sample_count", 1)
