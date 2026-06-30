@@ -73,7 +73,16 @@ def teardown():
     for a in eas.get_all_level_actors():
         lbl = a.get_actor_label()
         if lbl.startswith(
-            ("VKR_", "VK_Rig", "VK_Cam", "VK_InstProbe", "VK_SC", "VK_Diag", "VK_Calib")
+            (
+                "VKR_",
+                "VK_Rig",
+                "VK_Cam",
+                "VK_InstProbe",
+                "VK_CityCar",
+                "VK_SC",
+                "VK_Diag",
+                "VK_Calib",
+            )
         ):
             eas.destroy_actor(a)
 
@@ -241,8 +250,15 @@ def _hit_dist(world, a, b):
     """Distance from a to the first collision hit on segment a->b, or None if the
     segment is clear. Used to detect a camera jammed against a wall/fence."""
     hit = unreal.SystemLibrary.line_trace_single(
-        world, a, b, unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [],
-        unreal.DrawDebugTrace.NONE, True)
+        world,
+        a,
+        b,
+        unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+        False,
+        [],
+        unreal.DrawDebugTrace.NONE,
+        True,
+    )
     if not hit:
         return None
     return (hit.to_tuple()[5] - a).length()  # impact_point distance from a
@@ -324,6 +340,24 @@ RIG_CLEARANCE_CM = 350.0
 # hidden behind a fence/wall (the degenerate "red grid" pose) is a wasted render and
 # is dropped at export anyway - skip it BEFORE keyframing so MRQ never renders it.
 MIN_VISIBLE_KP = 4
+
+# PHANTOM-LABEL GUARD. City Sample traffic is rendered via instanced static meshes
+# that UE5 culls / dithers to invisible beyond a distance, but the keypoint annotator
+# projects a vehicle's points geometrically regardless of whether its mesh is actually
+# drawn - producing labels on EMPTY GROUND (verified: ~10-15%+ of v4 instances were
+# phantom skeletons on bare road). The occlusion ray test does not catch this (it
+# checks blockage, not whether the mesh exists). Two in-capture guards:
+#   1. MAX_LABEL_DIST_CM   - never label a city vehicle past this camera distance, the
+#                            regime where culling kicks in and the car is <~90 px anyway.
+#   2. MIN_INST_BBOX_PX    - drop instances whose projected bbox is so small the points
+#                            would collapse onto ~one pixel.
+# NOTE: the robust fix is an MRQ object-id / depth pass so a keypoint counts as visible
+# only when its pixel actually belongs to that vehicle's rendered mesh; the distance
+# gate is the pragmatic stop-gap until that pass exists. The post-hoc dephantom +
+# min-area filter (scripts/synth_clean_experiment.py in the trainer repo) cleans
+# already-captured data without re-rendering.
+MAX_LABEL_DIST_CM = 4000.0
+MIN_INST_BBOX_PX = 24.0
 
 
 def _parked_xy(cx, cy, radius_cm=6000.0):
@@ -439,6 +473,7 @@ def setup_and_project(
         time.sleep(1.0)
     wp.load_actors([d.guid for d in (descs or [])])
     _disable_hlod_proxies(unreal.Vector(cx, cy, 0.0))
+    _disable_mass_spawners()  # PIE renders only our spawned+labelled cars, no Mass traffic
     if light_name:
         try:
             ue_lighting.apply_lighting(light_name)
@@ -474,6 +509,13 @@ def setup_and_project(
             unreal.log_warning(f"camera grade '{light_name}' not applied: {e}")
 
     inst_anns = _instance_annotators(cx, cy) if with_instances else []
+    if with_instances:
+        # add labelled "traffic": random vehicles spawned along the ZoneGraph lanes,
+        # so frames vary per group without the unlabelled Mass traffic (which would be
+        # negative supervision). Seeded by group_tag for reproducible-but-varied runs.
+        inst_anns += _lane_traffic_annotators(
+            cx, cy, P, parked, n=14, seed=abs(hash(group_tag)) % (2**31)
+        )
 
     # Cache the rig's mesh-part AABB corners once (rig is static through the orbit) so
     # the per-pose bbox is the projection of the real car mesh, not the phantom
@@ -532,9 +574,22 @@ def setup_and_project(
         # city vehicle instances: the probe holds no mesh, so its mesh-bbox would be
         # degenerate - fall back to the keypoint hull (bb=None) in the converter.
         for probe, wv_ann, wv_names, xform in inst_anns:
+            # PHANTOM GUARD #1: skip vehicles past the cull-prone distance, where UE5
+            # may not render the mesh yet we would still project (empty-ground) labels.
+            veh = xform.translation
+            if (veh - loc).length() > MAX_LABEL_DIST_CM:
+                continue
             probe.set_actor_transform(xform, False, False)
             wres = wv_ann.capture_points(cc, IMG_W, IMG_H)
-            rec = _instance_record(_kpts_from_res(wres, wv_names), None)
+            kpts = _kpts_from_res(wres, wv_names)
+            # PHANTOM GUARD #2: drop instances whose visible-keypoint hull is so small
+            # the points would collapse onto ~one pixel.
+            vis = [(k["x"], k["y"]) for k in kpts if k["v"] > 0]
+            if len(vis) >= 2:
+                xs, ys = [p[0] for p in vis], [p[1] for p in vis]
+                if max(max(xs) - min(xs), max(ys) - min(ys)) < MIN_INST_BBOX_PX:
+                    continue
+            rec = _instance_record(kpts, None)
             if rec is not None and sum(1 for k in rec["keypoints"] if k[2] > 0) >= 2:
                 instances.append(rec)
         if instances[0] is None:
@@ -614,7 +669,7 @@ def _instance_annotators(cx, cy, radius=6000.0):
         return []
     eas = _eas()
     out = []
-    for idx, (_wv_type, wv_config_path, loc, rot) in enumerate(world_insts):
+    for idx, (wv_type, wv_config_path, loc, rot) in enumerate(world_insts):
         try:
             wv_cfg = json.load(open(wv_config_path, encoding="utf-8"))
         except Exception:
@@ -630,8 +685,139 @@ def _instance_annotators(cx, cy, radius=6000.0):
             {k: unreal.Vector(*v) for k, v in wv_cfg["keypoints"].items()},
         )
         xform = unreal.Transform(unreal.Vector(*loc), unreal.Rotator(*rot), unreal.Vector(1, 1, 1))
+        # Spawn a REAL body-mesh copy at the instance so the labelled car actually
+        # renders in MRQ. City Sample's parked cars are Mass-spawned at runtime in the
+        # PIE world (BP_MassTrafficParkedVehicleSpawner) and do NOT match the editor ISM
+        # previews we discover, so without our own copy the label sits on empty ground.
+        body = unreal.EditorAssetLibrary.load_asset(f"/Game/Vehicle/{wv_type}/Mesh/SM_{wv_type}")
+        if body is not None:
+            car = eas.spawn_actor_from_class(
+                unreal.StaticMeshActor, xform.translation, xform.rotation.rotator()
+            )
+            car.set_actor_label(f"VK_CityCar_{idx}")
+            smc = car.static_mesh_component
+            smc.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+            smc.set_static_mesh(body)
         out.append((probe, wv_ann, list(wv_cfg["keypoints"].keys()), xform))
     return out
+
+
+def _lane_traffic_annotators(cx, cy, rig_P, parked_xy, n=14, seed=0, radius=4000.0):
+    """Spawn random labelled vehicles along the ZoneGraph lanes (faux traffic) so each
+    group's frames vary - WITHOUT the unlabelled Mass traffic (negative supervision).
+    Each car is a real StaticMeshActor (renders in MRQ) oriented along the lane, ground
+    -snapped, plus a hidden probe for keypoint projection. Returns the same
+    (probe, annotator, schema_names, transform) tuples as _instance_annotators."""
+    import glob
+    import random as _random
+
+    rng = _random.Random(seed)  # nosec B311 - scene variety, not cryptographic
+    world = _world()
+    eas = _eas()
+    lanes = [
+        p
+        for p in ue_zonegraph.query_lane_points(unreal.Vector(cx, cy, 0), radius)
+        if 30.0 < p.position[2] < 150.0
+    ]
+    rng.shuffle(lanes)
+    cfgs = sorted(glob.glob(f"{_CFG_DIR}/citysample_*.json"))
+    occupied = [(rig_P.x, rig_P.y), *list(parked_xy)]
+    out: list = []
+    for lp in lanes:
+        if len(out) >= n:
+            break
+        x, y = lp.position[0], lp.position[1]
+        if any((x - ox) ** 2 + (y - oy) ** 2 < 500.0**2 for ox, oy in occupied):
+            continue  # keep clear of the rig / parked cars / other traffic
+        cfg_path = rng.choice(cfgs)
+        try:
+            cfg = json.load(open(cfg_path, encoding="utf-8"))
+        except Exception:
+            continue
+        type_id = os.path.basename(cfg_path)[len("citysample_") : -len(".json")]
+        body = unreal.EditorAssetLibrary.load_asset(f"/Game/Vehicle/{type_id}/Mesh/SM_{type_id}")
+        if body is None:
+            continue
+        ref = ue_zonegraph._trace_down(world, x, y)
+        if ref is None or ref[1].z < 0.85:
+            continue  # no road or a ramp/sidewalk slope, not flat drivable surface
+        road_z = ref[0].z
+        # line-of-sight from the venue: skip lanes whose car would sit behind a building
+        # (a parallel street) where its label would project onto the wall. Trace at body
+        # height from the rig, IGNORING vehicles (only buildings should block) - else the
+        # surrounding parked cars register as false occlusions and drop everything.
+        eye = unreal.Vector(rig_P.x, rig_P.y, road_z + 150.0)
+        tgt = unreal.Vector(x, y, road_z + 70.0)
+        ignore_veh = [
+            a
+            for a in eas.get_all_level_actors()
+            if a.get_actor_label().startswith(("VK_CityCar", "VK_Rig", "VKR_"))
+        ]
+        hit = unreal.SystemLibrary.line_trace_single(
+            world,
+            eye,
+            tgt,
+            unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+            True,
+            ignore_veh,
+            unreal.DrawDebugTrace.NONE,
+            True,
+        )
+        if hit:
+            d = (hit.to_tuple()[5] - eye).length()
+            if d < (tgt - eye).length() - 250.0:
+                continue  # a building stands between the venue and this lane point
+        yaw = math.degrees(math.atan2(lp.tangent[1], lp.tangent[0]))
+        idx = len(out)
+        car = eas.spawn_actor_from_class(
+            unreal.StaticMeshActor, unreal.Vector(x, y, road_z), unreal.Rotator(0, 0, yaw)
+        )
+        car.set_actor_label(f"VK_CityCar_lane{idx}")
+        smc = car.static_mesh_component
+        smc.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+        smc.set_static_mesh(body)
+        o, e = car.get_actor_bounds(False)  # seat wheels on the road
+        loc = car.get_actor_location()
+        car.set_actor_location(
+            unreal.Vector(loc.x, loc.y, loc.z + (road_z - (o.z - e.z))), False, False
+        )
+        probe = eas.spawn_actor_from_class(
+            unreal.Actor, unreal.Vector(0, 0, -100000), unreal.Rotator(0, 0, 0)
+        )
+        probe.set_actor_label(f"VK_InstProbe_lane{idx}")
+        probe.root_component.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+        ann = unreal.new_object(unreal.SynthVehicleAnnotator, outer=probe)
+        ann.set_editor_property(
+            "local_point_by_schema_name",
+            {k: unreal.Vector(*v) for k, v in cfg["keypoints"].items()},
+        )
+        occupied.append((x, y))
+        out.append((probe, ann, list(cfg["keypoints"].keys()), car.get_actor_transform()))
+    return out
+
+
+_MASS_SPAWNERS = (
+    "BP_MassTrafficVehicleSpawner",
+    "BP_MassTrafficIntersectionSpawner",
+    "BP_MassTrafficTrailerSpawner",
+    "BP_MassTrafficParkedVehicleSpawner",
+    "BP_MassCrowdSpawner",
+)
+
+
+def _disable_mass_spawners():
+    """Destroy the Mass traffic/crowd/parked spawners so the PIE world MRQ renders
+    contains ONLY the cars we spawn + label. Otherwise Mass repopulates the streets
+    at runtime with vehicles we never labelled (negative supervision) and skips the
+    editor ISM positions we did label (phantom labels on empty ground). In-memory
+    only; never saved."""
+    eas = _eas()
+    n = 0
+    for a in eas.get_all_level_actors():
+        if a.get_actor_label() in _MASS_SPAWNERS:
+            eas.destroy_actor(a)
+            n += 1
+    return n
 
 
 # Render quality presets. "lite" keeps Lumen global illumination but forces it to
@@ -671,8 +857,17 @@ def render_group(info, group_tag, quality="lite"):
     cv = c.find_or_add_setting_by_class(unreal.MoviePipelineConsoleVariableSetting)
     for name, val in RENDER_PRESETS.get(quality, RENDER_PRESETS["lite"]).items():
         cv.add_or_update_console_variable(name, val)
+    # Engine warm-up frames let the PIE world tick so World Partition streams the venue
+    # cells (and the VK_StreamSrc source loads them) BEFORE the first frame is captured;
+    # without this the distant parked cars are still streaming in and render as empty
+    # ground under their labels. Larger loading range so far cars in-frame also load.
+    cv.add_or_update_console_variable(
+        "wp.Runtime.OverrideRuntimeSpatialHashLoadingRange.Grid0", 12000.0
+    )
+    aa = c.find_or_add_setting_by_class(unreal.MoviePipelineAntiAliasingSetting)
+    aa.set_editor_property("engine_warm_up_count", 48)
+    aa.set_editor_property("use_camera_cut_for_warm_up", True)
     if quality == "lite":
-        aa = c.find_or_add_setting_by_class(unreal.MoviePipelineAntiAliasingSetting)
         aa.set_editor_property("spatial_sample_count", 1)
         aa.set_editor_property("temporal_sample_count", 1)
     o = c.find_or_add_setting_by_class(unreal.MoviePipelineOutputSetting)

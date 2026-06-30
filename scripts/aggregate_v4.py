@@ -15,7 +15,12 @@ from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent  # ue5-vehicle-synth/
 ROOT = _REPO / "captures" / "phase0_v4"
-GRID_RE = re.compile(r"^g\d\d_v\d_")  # only the 12 grid groups, not the test ones
+# The v4 full-capture groups are tagged {venue}_{lighting}_{rig}; this matches the
+# 36 real-run groups exactly and skips the legacy grid/trial/probe directories.
+GRID_RE = re.compile(
+    r"^(downtown|residential|intersection|arterial)_"
+    r"(day_clear|golden|overcast)_(car13|van01|truck04)$"
+)
 
 merged = ROOT / "captures_all.jsonl"
 lines = []
@@ -46,7 +51,7 @@ subprocess.run(
         "--out",
         str(out),
         "--dataset-name",
-        "phase0-v4",
+        "phase0-v4-full",
     ],
     check=True,
     cwd=str(_REPO),

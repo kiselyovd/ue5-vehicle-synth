@@ -85,6 +85,13 @@ def discover_world_vehicles(
     for actor in eas.get_all_level_actors():
         if actor.get_actor_label().startswith(("VKR_", "VK_")):
             continue
+        # NOTE: we deliberately enumerate editor-only managers (CARS_*) too. They do
+        # not render in the MRQ PIE world themselves, but the capture spawns its OWN
+        # StaticMeshActor copy at every discovered position (see _instance_annotators),
+        # and those copies render regardless - so including the editor-only positions
+        # restores the dense parked rows while keeping every label backed by a rendered
+        # car (no phantoms). The Mass parked/traffic spawners are disabled before render
+        # so nothing un-labelled appears.
         for comp in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
             sm = comp.get_editor_property("static_mesh")
             if sm is None:
