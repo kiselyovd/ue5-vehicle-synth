@@ -514,7 +514,7 @@ def setup_and_project(
         # add labelled "traffic": random vehicles spawned along the ZoneGraph lanes,
         # so frames vary per group without the unlabelled Mass traffic (which would be
         # negative supervision). Seeded by group_tag for reproducible-but-varied runs.
-        inst_anns += _lane_traffic_annotators(cx, cy, P, parked, n=14, seed=_grp_seed + 1)
+        inst_anns += _lane_traffic_annotators(cx, cy, P, parked, n=6, seed=_grp_seed + 1)
 
     # Cache the rig's mesh-part AABB corners once (rig is static through the orbit) so
     # the per-pose bbox is the projection of the real car mesh, not the phantom
@@ -527,15 +527,25 @@ def setup_and_project(
         # add partial-visibility variety: foreground-occluder + truncation poses
         poses = poses + occluder_poses(P, parked) + truncation_poses(P)
 
-    # Level sequence: one camera, keyframed transform (constant), camera cut [0,N)
-    if unreal.EditorAssetLibrary.does_directory_exist("/Game/VK_Temp"):
-        unreal.EditorAssetLibrary.delete_directory("/Game/VK_Temp")
-    seq = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
-        f"VK_Seq_{group_tag}",
-        "/Game/VK_Temp",
-        unreal.LevelSequence,
-        unreal.LevelSequenceFactoryNew(),
-    )
+    # Level sequence: one camera, keyframed transform (constant), camera cut [0,N).
+    # Delete only THIS group's own prior sequence (if re-running) - NOT the whole
+    # /Game/VK_Temp dir: in a batch run the previous group's sequence is still locked by
+    # its just-finished MRQ job, so a directory wipe fails and the next create_asset
+    # returns None ("set_display_rate on NoneType"). A unique per-group name avoids the
+    # collision entirely.
+    seq = None
+    for suffix in ("", "_b", "_c", "_d", "_e"):
+        name = f"VK_Seq_{group_tag}{suffix}"
+        path = f"/Game/VK_Temp/{name}"
+        if unreal.EditorAssetLibrary.does_asset_exist(path):
+            unreal.EditorAssetLibrary.delete_asset(path)
+        seq = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+            name, "/Game/VK_Temp", unreal.LevelSequence, unreal.LevelSequenceFactoryNew()
+        )
+        if seq is not None:
+            break  # a prior group's sequence may still be locked under the base name
+    if seq is None:
+        raise RuntimeError(f"could not create a level sequence for {group_tag}")
     seq.set_display_rate(unreal.FrameRate(24, 1))
     seq.set_playback_start(0)
     # Use a SPAWNABLE camera, not a possessable: a possessable binding does not
@@ -651,12 +661,14 @@ def _key_transform(ch, frame, loc, rot):
         ch[k].add_key(fn, vals[k], interpolation=C)
 
 
-def _instance_annotators(cx, cy, seed=0, radius=6000.0):
+def _instance_annotators(cx, cy, seed=0, radius=6000.0, max_cars=40):
     """Discover City Sample ISM vehicle instances near the venue and build one probe
     annotator per instance (teleported per pose), spawning a randomised-type body-mesh
     copy at each so the labelled car renders in MRQ. `seed` makes the per-position type
-    choice reproducible-but-varied per group. Returns list of
-    (probe_actor, annotator, schema_names, instance_transform)."""
+    choice reproducible-but-varied per group. `max_cars` caps how many positions are
+    spawned (random subset, seeded) - 119 spawns + per-pose projection was too heavy to
+    finish setup inside the MCP exec timeout, so the scene stays dense but bounded.
+    Returns list of (probe_actor, annotator, schema_names, instance_transform)."""
     try:
         import ue_capture_batch
 
@@ -683,6 +695,8 @@ def _instance_annotators(cx, cy, seed=0, radius=6000.0):
         for g in glob.glob(f"{_CFG_DIR}/citysample_*.json")
         if "vehBus" not in g and "vehTruck" not in g
     )
+    if len(world_insts) > max_cars:  # cap spawns so setup finishes within the MCP timeout
+        world_insts = rng.sample(list(world_insts), max_cars)
     out: list = []
     for idx, (_wv_type, _wv_cfg_path, loc, rot) in enumerate(world_insts):
         # Spawn a REAL body-mesh copy at the discovered position so the labelled car
@@ -867,10 +881,12 @@ RENDER_PRESETS = {
 }
 
 
-def render_group(info, group_tag, quality="lite"):
+def render_group(info, group_tag, quality="lite", executor=None):
     """Phase B: MRQ-render the keyframed sequence to PNGs (async). Motion blur off,
     1280x720, named {group_tag}.{frame}.png to match the JSONL. `quality` selects a
-    RENDER_PRESETS entry ('lite' = Lumen, no hardware RT - default; 'gold' = full RT)."""
+    RENDER_PRESETS entry ('lite' = Lumen, no hardware RT - default; 'gold' = full RT).
+    Pass `executor` (with its on_executor_finished_delegate already bound) to chain an
+    autonomous multi-group batch; otherwise a fresh PIE executor is used."""
     qsub = unreal.get_editor_subsystem(unreal.MoviePipelineQueueSubsystem)
     q = qsub.get_queue()
     for j in list(q.get_jobs()):
@@ -904,7 +920,8 @@ def render_group(info, group_tag, quality="lite"):
     o.set_editor_property("file_name_format", group_tag + ".{frame_number}")
     o.set_editor_property("override_existing_output", True)
     os.makedirs(f"{info['out_dir']}/rgb", exist_ok=True)
-    qsub.render_queue_with_executor_instance(unreal.MoviePipelinePIEExecutor())
+    ex = executor if executor is not None else unreal.MoviePipelinePIEExecutor()
+    qsub.render_queue_with_executor_instance(ex)
     return f"{info['out_dir']}/rgb"
 
 
