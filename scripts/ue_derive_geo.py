@@ -59,24 +59,53 @@ _TAILLIGHT_Z = 72.0
 _EXHAUST_Z = 24.0
 
 
+def _static_mesh(type_id):
+    return unreal.EditorAssetLibrary.load_asset(f"/Game/Vehicle/{type_id}/Mesh/SM_{type_id}")
+
+
+def _section_verts(sm, section, lod_index=0):
+    try:
+        vs = unreal.ProceduralMeshLibrary.get_section_from_static_mesh(sm, lod_index, section)[0]
+    except Exception:
+        return []
+    return [(v.x, v.y, v.z) for v in (vs or [])]
+
+
 def _all_verts(type_id, lod_index=0):
     """Full static-mesh vertex cloud [(x,y,z),...] in mesh-local cm (== actor-local)."""
-    sm = unreal.EditorAssetLibrary.load_asset(f"/Game/Vehicle/{type_id}/Mesh/SM_{type_id}")
+    sm = _static_mesh(type_id)
     if sm is None:
         return []
     verts = []
-    si = 0
-    while si < 64:
-        try:
-            res = unreal.ProceduralMeshLibrary.get_section_from_static_mesh(sm, lod_index, si)
-        except Exception:
+    for si in range(64):
+        v = _section_verts(sm, si, lod_index)
+        if not v and si >= sm.get_num_sections(0):
             break
-        vs = res[0]
-        if not vs:
-            break
-        verts.extend([(v.x, v.y, v.z) for v in vs])
-        si += 1
+        verts.extend(v)
     return verts
+
+
+def _material_verts(sm, matkey):
+    """Vertices of every section whose material slot name contains `matkey` (e.g.
+    'veh_light' = the headlight/taillight glass, 'veh_mirror' = the wing mirrors).
+    Lets us place lights/mirrors on the ACTUAL emissive geometry, not a guessed height."""
+    smes = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+    mats = sm.get_editor_property("static_materials")
+    out = []
+    for s in range(sm.get_num_sections(0)):
+        slot = smes.get_lod_material_slot(sm, 0, s)
+        name = str(mats[slot].get_editor_property("material_slot_name"))
+        if matkey in name:
+            out.extend(_section_verts(sm, s))
+    return out
+
+
+def _cluster_centroid(verts, xpred, ypred):
+    pts = [p for p in verts if xpred(p[0]) and ypred(p[1])]
+    if not pts:
+        return None
+    n = len(pts)
+    return [sum(p[i] for p in pts) / n for i in range(3)]
 
 
 def _bones(type_id):
@@ -140,10 +169,15 @@ def _front_face_x(verts, z0, ylo, yhi, front=True):
 def derive_points(type_id):
     """Return (ordered 24-kpt dict, warnings, debug) for one vehicle type."""
     warn = []
+    sm = _static_mesh(type_id)
+    if sm is None:
+        return None, ["no static mesh"], {}
     verts = _all_verts(type_id)
     if not verts:
         return None, ["no static-mesh vertices"], {}
     bones = _bones(type_id)
+    light_v = _material_verts(sm, "veh_light")
+    mirror_v = _material_verts(sm, "veh_mirror")
     xs = [p[0] for p in verts]
     ys = [p[1] for p in verts]
     zs = [p[2] for p in verts]
@@ -178,31 +212,43 @@ def derive_points(type_id):
     k["Right_Back_Top"] = rp(rr_x, roof_y, roof_z)
     k["Left_Back_Top"] = rp(rr_x, -roof_y, roof_z)
 
-    # --- 4-7 lights: real front/rear face at a fixed physical height ---
-    hl_y = 0.72 * ymax
-    hf = _front_face_x(verts, _HEADLIGHT_Z, 0.5 * ymax, 0.92 * ymax, front=True)
-    tr = _front_face_x(verts, _TAILLIGHT_Z, 0.5 * ymax, 0.92 * ymax, front=False)
-    hf = xmax if hf is None else hf
-    tr = xmin if tr is None else tr
-    k["Right_Front_HeadLight"] = rp(hf, hl_y, _HEADLIGHT_Z)
-    k["Left_Front_HeadLight"] = rp(hf, -hl_y, _HEADLIGHT_Z)
-    k["Right_Back_HeadLight"] = rp(tr, 0.78 * ymax, _TAILLIGHT_Z)
-    k["Left_Back_HeadLight"] = rp(tr, -0.78 * ymax, _TAILLIGHT_Z)
+    # --- 4-7 lights: centroid of the real veh_light glass per corner (front/rear x L/R).
+    # This lands on the actual headlight/taillight - height and depth vary a LOT by type
+    # (a van taillight sits ~124cm, a coupe's ~71cm), which a fixed guess got badly wrong.
+    def light(front, right):
+        xp = (lambda x: x > 60) if front else (lambda x: x < -60)
+        yp = (lambda y: y > 0) if right else (lambda y: y < 0)
+        c = _cluster_centroid(light_v, xp, yp) if light_v else None
+        if c is None:  # fallback: front/rear face at a plausible height
+            fx = xmax if front else xmin
+            c = [fx, (1 if right else -1) * 0.74 * ymax, _HEADLIGHT_Z if front else _TAILLIGHT_Z]
+            warn.append(f"{'front' if front else 'rear'} light fallback")
+        return rp(*c)
+
+    k["Right_Front_HeadLight"] = light(True, True)
+    k["Left_Front_HeadLight"] = light(True, False)
+    k["Right_Back_HeadLight"] = light(False, True)
+    k["Left_Back_HeadLight"] = light(False, False)
+    tr = min((p[0] for p in light_v if p[0] < -60), default=xmin)
 
     # --- 8 exhaust, 13 center ---
     k["Exhaust"] = rp(tr + 8, -0.45 * ymax, _EXHAUST_Z)
     k["Center"] = rp((rf_x + rr_x) / 2.0, 0.0, 0.45 * zmax)
 
-    # --- 14-15 mirrors: bone or estimate at the A-pillar ---
-    ml = _bone(bones, "side_view_mirror_body_l", "mirror_l")
-    mr = _bone(bones, "side_view_mirror_body_r", "mirror_r")
-    if ml is None:
-        ml = [rf_x + 0.10 * (xmax - xmin), -1.02 * ymax, 0.68 * zmax]
-        warn.append("mirrors estimated")
-    if mr is None:
-        mr = [rf_x + 0.10 * (xmax - xmin), 1.02 * ymax, 0.68 * zmax]
-    k["Left_Side_Mirror"] = rp(*ml)
-    k["Right_Side_Mirror"] = rp(*mr)
+    # --- 14-15 mirrors: outermost point of the real veh_mirror glass, else bone ---
+    def mirror(right):
+        side = [p for p in mirror_v if (p[1] > 0) == right]
+        if side:  # the wing tip is the |Y|-outermost vert of the mirror section
+            tip = max(side, key=lambda p: abs(p[1]))
+            return [tip[0], tip[1], sum(p[2] for p in side) / len(side)]
+        b = _bone(bones, "side_view_mirror_body_r" if right else "side_view_mirror_body_l")
+        if b:
+            return b
+        warn.append("mirror estimated")
+        return [rf_x + 0.10 * (xmax - xmin), (1 if right else -1) * 1.02 * ymax, 0.68 * zmax]
+
+    k["Left_Side_Mirror"] = rp(*mirror(False))
+    k["Right_Side_Mirror"] = rp(*mirror(True))
 
     # --- 16-19 bumper corners: bone or vertex front/rear-bottom corner ---
     def bumper(bone_names, fx, sy):
