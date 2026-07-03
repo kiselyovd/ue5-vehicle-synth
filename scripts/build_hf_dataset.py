@@ -59,6 +59,7 @@ FEATURES = Features(
         "height": Value("int32"),
         "venue": Value("string"),
         "lighting": Value("string"),
+        "rig": Value("string"),
         "objects": Sequence(
             {
                 "bbox": Sequence(Value("float32"), length=4),  # COCO xywh
@@ -71,10 +72,12 @@ FEATURES = Features(
 )
 
 
-def _venue_lighting(file_name: str) -> tuple[str, str]:
-    tag = file_name.split("/")[0]  # e.g. g00_v0_day_clear
-    parts = tag.split("_", 2)
-    return (parts[1], parts[2]) if len(parts) == 3 else ("", "")
+def _venue_lighting(file_name: str) -> tuple[str, str, str]:
+    tag = file_name.split("/")[0]  # e.g. downtown_day_clear_car13
+    parts = tag.split("_")
+    if len(parts) < 3:
+        return "", "", ""
+    return parts[0], "_".join(parts[1:-1]), parts[-1]
 
 
 def build_records(limit: int = 0) -> list[dict]:
@@ -87,7 +90,7 @@ def build_records(limit: int = 0) -> list[dict]:
         imgs = imgs[:limit]
     records = []
     for im in imgs:
-        venue, lighting = _venue_lighting(im["file_name"])
+        venue, lighting, rig = _venue_lighting(im["file_name"])
         anns = by_img.get(im["id"], [])
         objects = {
             "bbox": [[float(x) for x in a["bbox"]] for a in anns],
@@ -104,6 +107,7 @@ def build_records(limit: int = 0) -> list[dict]:
                 "height": int(im["height"]),
                 "venue": venue,
                 "lighting": lighting,
+                "rig": rig,
                 "objects": objects,
             }
         )
