@@ -6,7 +6,7 @@
 
 <p align="center"><em>Full demo: <a href="videos/demo.mp4">videos/demo.mp4</a> - three scenes, each a single vehicle driving normally, then with its 24-point keypoint skeleton, then as a wireframe ghost.</em></p>
 
-Real vehicle-keypoint data is scarce and expensive to label. A game engine renders the same scene with **perfect, free, pixel-exact annotations** and unlimited variety of viewpoint, vehicle, weather, and time of day. This project builds that generator as a reusable Unreal Engine C++ plugin and uses it to extend the [`vehicle-keypoints`](https://github.com/kiselyovd/vehicle-keypoints) model from a 14-point to a 24-point schema with a sim-to-real recipe.
+Real vehicle-keypoint data is scarce and expensive to label. A game engine provides projected annotations and controlled variation in viewpoints, lighting, and available vehicle assets. This project builds that generator as a reusable Unreal Engine C++ plugin and uses it to extend the [`vehicle-keypoints`](https://github.com/kiselyovd/vehicle-keypoints) model from a 14-point to a 24-point schema for controlled sim-to-real experiments.
 
 <div class="grid cards" markdown>
 
@@ -89,18 +89,22 @@ Keeping points 0-13 in the exact CarFusion order means a 24-point model stays ba
 
 ## Status
 
-!!! info "Phase 0 vertical slice"
-    The capture pipeline, the C++ plugin, ZoneGraph road placement, the gold-path render, and the sim-to-real training driver are built and validated end to end. The current focus is the Phase 0 **kill switch** - synthetic pre-training must lift the v1 model's OKS-mAP by at least +2pp on the CarFusion test set. Results, positive or negative, are documented openly in the repo. A narrow single-city slice is a hard case for sim-to-real transfer; the pipeline and an honest write-up are the deliverable either way.
+!!! info "Capture pipeline built; Phase 0 experiment complete"
+    The published dataset contains **2,510 frames** with 24-point keypoint annotations. The capture pipeline and the transfer experiment are separate deliverables.
+
+The acceptance criterion was **+2 pp OKS-mAP** on the held-out CarFusion test set. In the matched experiments with corrected flip augmentation, the synthetic supplement reduced OKS-mAP by **1.7 pp** from the weak checkpoint and **9.5 pp** from the strong one. The criterion was not met for the tested 2D transfer recipe.
+
+Read the [experiment and error analysis](https://github.com/kiselyovd/vehicle-keypoints/blob/main/docs/phase0/synthetic-pretraining.md) for the two-arm protocol, augmentation fix, and follow-up hypotheses.
 
 ## Results & label quality
 
-A model trained **only on the synthetic frames** reaches **0.86 box mAP@50** on held-out synthetic data - the 24-point labels are clean and learnable. On the real CarFusion test set the synthetic pre-training did **not** beat the real-only baseline (a narrow single-city slice is a hard sim-to-real case), and that gap is partly a *label-convention mismatch*: the kill switch grades against CarFusion's own annotations.
+The synthetic-only model's in-domain benchmark is reported in the [experiment write-up](https://github.com/kiselyovd/vehicle-keypoints/blob/main/docs/phase0/synthetic-pretraining.md#why-the-raw-number-is-not-the-whole-story). Learnable projected labels do not by themselves establish transfer to real road images.
 
-That matters because our labels are demonstrably cleaner. Below, our synthetic ground truth (24 points, pixel-exact by construction) versus CarFusion's real ground truth (14 points, multi-view triangulated):
+The comparison below shows projected synthetic ground truth (24 points) alongside multi-view-triangulated CarFusion ground truth (14 points):
 
-![Label quality: our pixel-exact synthetic 24-point labels (left) vs CarFusion's triangulated 14-point labels (right)](images/label_quality.png)
+![Projected synthetic 24-point labels beside CarFusion's triangulated 14-point labels](images/label_quality.png)
 
-Ours are denser and sit precisely on the anatomy; CarFusion's are sparser and visibly scattered. So a model pulled toward our convention is penalised by a noisier reference - the negative transfer number conflates label-convention mismatch with true transfer quality, and is reported honestly rather than hidden.
+The later mesh-derived and per-keypoint controls did not support label geometry as the cause of the transfer penalty. Appearance and vehicle coverage remain hypotheses in the report.
 
 ## Get it
 
@@ -118,7 +122,7 @@ Ours are denser and sit precisely on the anatomy; CarFusion's are sparser and vi
 
     ---
 
-    1,440 rendered frames + multi-instance COCO on the Hub.
+    2,510 rendered frames + multi-instance COCO on the Hub.
 
     [:octicons-arrow-right-24: HuggingFace dataset](https://huggingface.co/datasets/kiselyovd/citysample-vehicle-keypoints-24pt)
 
