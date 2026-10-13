@@ -1,18 +1,23 @@
 # ue5-vehicle-synth
 
-[![CI](https://img.shields.io/github/actions/workflow/status/kiselyovd/ue5-vehicle-synth/ci.yml?branch=main&label=CI&style=for-the-badge&logo=github)](https://github.com/kiselyovd/ue5-vehicle-synth/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-mkdocs-526CFE?style=for-the-badge&logo=materialformkdocs&logoColor=white)](https://kiselyovd.github.io/ue5-vehicle-synth/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
-[![Python 3.13+](https://img.shields.io/badge/Python-3.13%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![UE 5.6](https://img.shields.io/badge/Unreal_Engine-5.6-0E1128?style=for-the-badge&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
+[CI](https://github.com/kiselyovd/ue5-vehicle-synth/actions/workflows/ci.yml) · [Docs](https://kiselyovd.github.io/ue5-vehicle-synth/) · [MIT](LICENSE) · Python 3.13 · UE 5.6
 
 A synthetic vehicle-keypoint dataset pipeline built on Unreal Engine 5 and Epic's City Sample. It places vehicles on the real road network, renders photoreal frames through Movie Render Queue, and exports COCO keypoint annotations for training the [`vehicle-keypoints`](https://github.com/kiselyovd/vehicle-keypoints) model.
 
 **Russian version:** [README.ru.md](README.ru.md)
 
+[![Interactive capture-pipeline explorer](docs/images/showcase.png)](https://kiselyovd.github.io/ue5-vehicle-synth/showcase/)
+
+**[Explore the capture workflow](https://kiselyovd.github.io/ue5-vehicle-synth/showcase/)** — road placement, geometric annotation, rendered poses, and published labels.
+
+<details>
+<summary>Captured demo sequence</summary>
+
 ![ue5-vehicle-synth demo: a car drives, gains its 24-point keypoint skeleton, then drives on as a wireframe ghost](docs/videos/demo-hero.gif)
 
 > **Full demo video:** [`docs/videos/demo.mp4`](docs/videos/demo.mp4) - three scenes, each a single vehicle driving normally, then with its 24-point keypoint skeleton, then as a wireframe ghost, across different locations and lighting. Rendered in City Sample through Movie Render Queue.
+
+</details>
 
 ## Status
 
@@ -26,7 +31,7 @@ Read the [experiment and error analysis](https://github.com/kiselyovd/vehicle-ke
 
 Real vehicle-keypoint data is scarce and expensive to label. A simulator provides projected annotations and controlled variation in viewpoints, lighting, and available vehicle assets. This project builds the generator as a reusable Unreal Engine C++ plugin (`UESynthCapture`) and uses it to extend `vehicle-keypoints` from a 14-point to a 24-point schema for controlled sim-to-real experiments.
 
-The narrative is deliberately concrete: frames are rendered inside Epic's "Matrix Awakens" City Sample, so the dataset carries a recognizable, high-fidelity look while staying fully redistributable (see [Legal](#legal)).
+The narrative is deliberately concrete: frames are rendered inside Epic's "Matrix Awakens" City Sample, so the dataset carries a recognizable, high-fidelity look with provenance and redistribution boundaries documented in [Legal](#legal).
 
 ## How it works
 

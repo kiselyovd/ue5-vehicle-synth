@@ -24,7 +24,6 @@ The figures are captured/rendered artifacts from the published documentation. Ep
 
 The explorer uses published artifacts from [kiselyovd/ue5-vehicle-synth](https://github.com/kiselyovd/ue5-vehicle-synth). [Inspect the pinned source](https://github.com/kiselyovd/ue5-vehicle-synth/blob/72bb1884b58580e7aa41aeb1096268d2d1167578/docs/pipeline.md) and the [structured showcase data](assets/showcase/data.json).
 
-UI state stays in the current page. Detailed diagnostic events can be enabled with `?debug=1`; they contain selected IDs and modes, not sample content.
 
 ## See also
 
