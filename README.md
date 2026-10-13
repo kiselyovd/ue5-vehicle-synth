@@ -14,9 +14,17 @@ A synthetic vehicle-keypoint dataset pipeline built on Unreal Engine 5 and Epic'
 
 > **Full demo video:** [`docs/videos/demo.mp4`](docs/videos/demo.mp4) - three scenes, each a single vehicle driving normally, then with its 24-point keypoint skeleton, then as a wireframe ghost, across different locations and lighting. Rendered in City Sample through Movie Render Queue.
 
+## Status
+
+**Capture pipeline built; the Phase 0 sim-to-real experiment is complete.** The published dataset contains **2,510 frames** with a 24-point keypoint schema: [City Sample vehicle-keypoints dataset](https://huggingface.co/datasets/kiselyovd/citysample-vehicle-keypoints-24pt).
+
+The acceptance criterion was **+2 pp OKS-mAP** on the held-out CarFusion test set. In the matched experiments with corrected flip augmentation, the synthetic supplement instead reduced OKS-mAP by **1.7 pp** from a weak checkpoint and **9.5 pp** from a strong one. The criterion was not met. This result concerns the tested 2D transfer recipe; it does not measure the pipeline's utility for other tasks.
+
+Read the [experiment and error analysis](https://github.com/kiselyovd/vehicle-keypoints/blob/main/docs/phase0/synthetic-pretraining.md) for the two-arm protocol, augmentation fix, and next hypotheses. The [Wiki](wiki/Home.md) covers the capture workflow.
+
 ## Why
 
-Real vehicle-keypoint data is scarce and expensive to label. A simulator gives perfect, free, pixel-exact annotations and unlimited variety of viewpoint, vehicle, weather, and time of day. This project builds the generator as a reusable Unreal Engine C++ plugin (`UESynthCapture`) and uses it to extend `vehicle-keypoints` from a 14-point to a 24-point schema with a sim-to-real training recipe.
+Real vehicle-keypoint data is scarce and expensive to label. A simulator provides projected annotations and controlled variation in viewpoints, lighting, and available vehicle assets. This project builds the generator as a reusable Unreal Engine C++ plugin (`UESynthCapture`) and uses it to extend `vehicle-keypoints` from a 14-point to a 24-point schema for controlled sim-to-real experiments.
 
 The narrative is deliberately concrete: frames are rendered inside Epic's "Matrix Awakens" City Sample, so the dataset carries a recognizable, high-fidelity look while staying fully redistributable (see [Legal](#legal)).
 
@@ -45,10 +53,6 @@ Every vehicle is labeled with the full 24-point schema plus a mesh-bounds boundi
 ## The 24-point schema
 
 The first 14 points are the CarFusion canonical order (wheels, head and tail lights, roof corners, center, exhaust) for forward compatibility with the v1 model. Ten new points (side mirrors, bumper corners, window-base corners) extend the schema. Keypoint anchors are defined per vehicle type in `configs/vehicles/`.
-
-## Status
-
-Phase 0 vertical slice. The capture pipeline, the C++ plugin, ZoneGraph road placement, the gold-path render path, and the sim-to-real training driver are built and validated end to end. The Phase 0 kill switch (synthetic pre-training must lift the v1 model's OKS-mAP by at least +2pp on the CarFusion test set) is the current focus; results and the full dataset release will be documented here as they land. See the [Wiki](wiki/Home.md) for the engineering walkthrough.
 
 ## Tech stack
 
