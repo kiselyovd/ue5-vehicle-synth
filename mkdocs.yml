@@ -72,6 +72,13 @@ markdown_extensions:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 nav:
   - Home: index.md
+  - Showcase: showcase.md
   - How it works: pipeline.md
   - Legal (EULA): legal/CITY_SAMPLE_EULA_REVIEW.md
   - API reference: api.md
+
+extra_css:
+  - assets/showcase/explorer.css
+extra_javascript:
+  - path: assets/showcase/explorer.js
+    type: module

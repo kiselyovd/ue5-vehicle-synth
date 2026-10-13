@@ -1,5 +1,7 @@
 # ue5-vehicle-synth
 
+[Open the interactive showcase](showcase.md)
+
 <p align="center"><em>Synthetic vehicle-keypoint datasets, rendered inside Epic's City Sample with Unreal Engine 5.</em></p>
 
 ![ue5-vehicle-synth demo: a car drives, gains its 24-point keypoint skeleton, then drives on as a wireframe ghost](videos/demo-hero.gif)
