@@ -27,6 +27,8 @@ The acceptance criterion was **+2 pp OKS-mAP** on the held-out CarFusion test se
 
 Read the [experiment and error analysis](https://github.com/kiselyovd/vehicle-keypoints/blob/main/docs/phase0/synthetic-pretraining.md) for the two-arm protocol, augmentation fix, and next hypotheses. The [Wiki](wiki/Home.md) covers the capture workflow.
 
+[Live vehicle detection](https://huggingface.co/spaces/kiselyovd/vehicle-keypoints-demo) is available separately: the Space runs the main 14-point real-data detector, not the synthetic-only 24-point model.
+
 ## Why
 
 Real vehicle-keypoint data is scarce and expensive to label. A simulator provides projected annotations and controlled variation in viewpoints, lighting, and available vehicle assets. This project builds the generator as a reusable Unreal Engine C++ plugin (`UESynthCapture`) and uses it to extend `vehicle-keypoints` from a 14-point to a 24-point schema for controlled sim-to-real experiments.

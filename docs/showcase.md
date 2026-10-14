@@ -18,6 +18,8 @@ The published dataset contains 2,510 frames with a 24-point schema. In the compl
 
 The capture workflow and its transfer result are separate deliverables. [Read the experiment](https://github.com/kiselyovd/vehicle-keypoints/blob/main/docs/phase0/synthetic-pretraining.md) or [inspect the dataset](https://huggingface.co/datasets/kiselyovd/citysample-vehicle-keypoints-24pt).
 
+[Try live vehicle detection](https://huggingface.co/spaces/kiselyovd/vehicle-keypoints-demo) on your own image. That Space uses the separate main 14-point detector trained on real data, not the synthetic-only 24-point model.
+
 The figures are captured/rendered artifacts from the published documentation. Epic asset files are excluded from the dataset; see [provenance and terms](legal/CITY_SAMPLE_EULA_REVIEW.md).
 
 ## Sources and reproduction
