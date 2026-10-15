@@ -1,0 +1,37 @@
+{
+  "kind": "pipeline",
+  "owner": "kiselyovd",
+  "title": "UE5 Vehicle Synth",
+  "source": "https://github.com/kiselyovd/ue5-vehicle-synth/blob/72bb1884b58580e7aa41aeb1096268d2d1167578/docs/pipeline.md",
+  "source_sha": "72bb1884b58580e7aa41aeb1096268d2d1167578",
+  "stages": [
+    {
+      "id": "roads",
+      "label": "Road placement",
+      "image": "stages/roads.png",
+      "caption": "City Sample road lanes queried from ZoneGraph. Vehicles are placed along the existing road network.",
+      "source": "https://github.com/kiselyovd/ue5-vehicle-synth/blob/72bb1884b58580e7aa41aeb1096268d2d1167578/docs/pipeline.md"
+    },
+    {
+      "id": "geometry",
+      "label": "Keypoint projection",
+      "image": "stages/geometry.png",
+      "caption": "A captured vehicle with projected 24-point ground truth and a mesh-bounds box. The first 14 points retain CarFusion order.",
+      "source": "https://github.com/kiselyovd/ue5-vehicle-synth/blob/72bb1884b58580e7aa41aeb1096268d2d1167578/docs/pipeline.md"
+    },
+    {
+      "id": "render",
+      "label": "Rendered frames",
+      "image": "stages/render.png",
+      "caption": "Multiple camera poses rendered by Movie Render Queue. Annotation and rendering are separate pipeline stages.",
+      "source": "https://github.com/kiselyovd/ue5-vehicle-synth/blob/72bb1884b58580e7aa41aeb1096268d2d1167578/docs/pipeline.md"
+    },
+    {
+      "id": "dataset",
+      "label": "Published dataset",
+      "image": "stages/dataset.png",
+      "caption": "Projected synthetic annotations beside triangulated CarFusion labels. Label geometry and real-image transfer are evaluated separately.",
+      "source": "https://huggingface.co/datasets/kiselyovd/citysample-vehicle-keypoints-24pt"
+    }
+  ]
+}
