@@ -79,6 +79,7 @@ nav:
   - API reference: api.md
 
 extra_css:
+  - assets/accessibility.css?v=20261015-a11y
   - assets/showcase/explorer.css
 extra_javascript:
   - path: assets/showcase/explorer.js
