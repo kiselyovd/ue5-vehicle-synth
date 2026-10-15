@@ -11,27 +11,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate pinned dataset lineage and generated summary
+        run: |
+          python scripts/validate_lineage.py
+          python scripts/artifact_manifest.py --check
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
       - name: Set up Python
         run: uv python install
       - name: Install deps
-        run: uv sync --all-groups
+        run: uv sync --frozen --all-groups
       - name: Ruff check
-        run: uv run --all-groups ruff check .
+        run: uv run --frozen --all-groups ruff check .
       - name: Ruff format
-        run: uv run --all-groups ruff format --check .
+        run: uv run --frozen --all-groups ruff format --check .
       - name: Mypy
-        run: uv run --all-groups mypy src scripts
+        run: uv run --frozen --all-groups mypy src scripts
       - name: Deptry
-        run: uv run --all-groups deptry .
+        run: uv run --frozen --all-groups deptry .
       - name: Bandit
-        run: uv run --all-groups bandit -r src scripts -c pyproject.toml
+        run: uv run --frozen --all-groups bandit -r src scripts -c pyproject.toml
       - name: Interrogate
-        run: uv run --all-groups interrogate -c pyproject.toml src scripts
+        run: uv run --frozen --all-groups interrogate -c pyproject.toml src scripts
       - name: Pytest
-        run: uv run --all-groups pytest
+        run: uv run --frozen --all-groups pytest
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:

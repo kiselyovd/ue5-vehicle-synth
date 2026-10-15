@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "Cite this capture pipeline and credit Epic City Sample separately."
+title: "UE5 Vehicle Synthetic Data Pipeline"
+type: software
+authors:
+  - family-names: Kiselyov
+    given-names: Daniil
+repository-code: "https://github.com/kiselyovd/ue5-vehicle-synth"
+license: MIT

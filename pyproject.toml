@@ -106,6 +106,8 @@ known_first_party = ["ue5_vehicle_synth"]
 ignore = ["DEP004"]
 
 [tool.deptry.per_rule_ignores]
+# Audit-only column projection uses the PyArrow already required by datasets.
+DEP003 = ["pyarrow"]
 # DEP002: declared deps that are used at runtime (by UE scripts / COCO pipeline)
 # but not detected by static import scanning (editor-installed, optional, or
 # loaded via subprocess/data loaders rather than direct Python imports).

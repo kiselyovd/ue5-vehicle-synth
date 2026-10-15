@@ -118,7 +118,9 @@ def split_by_group(records: list[dict], seed: int = 42) -> dict[str, list[dict]]
     """Stratified 80/10/10 train/validation/test: each group (venue x lighting x
     vehicle) is split internally, so every condition appears in all three splits.
     NOTE: orbit frames of one group are correlated, so adjacent viewpoints can land
-    in different splits (mild leakage) - for a strict benchmark, hold out whole
+    in different splits. The released model also used a different 90/10 frame split:
+    234 of the 257 published test frames were used in training (see DATASET_LINEAGE.md).
+    For an independent benchmark, hold out whole
     groups instead (the group tag is the file_name prefix)."""
     by_group: dict[str, list[dict]] = {}
     for r in records:
@@ -156,12 +158,17 @@ def main() -> None:
         print(ex["file_name"], "->", len(ex["objects"]["bbox"]), "objects")
         return
 
+    identity = HfApi().whoami()
+    if (
+        identity.get("name") != "kiselyovd"
+        or args.repo_id != "kiselyovd/citysample-vehicle-keypoints-24pt"
+    ):
+        raise SystemExit("Refusing dataset publication outside the reviewed personal repository")
     dd.push_to_hub(
         args.repo_id,
         commit_message="Add load_dataset-ready parquet, 80/10/10 splits (image + objects)",
     )
     print(f"pushed parquet -> https://huggingface.co/datasets/{args.repo_id}")
-    _ = HfApi()
 
 
 if __name__ == "__main__":

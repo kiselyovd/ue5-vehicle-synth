@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "project": "ue5-vehicle-synth",
+  "hub": {
+    "repo_id": "kiselyovd/citysample-vehicle-keypoints-24pt",
+    "repo_type": "dataset",
+    "revision": "bf2e175ddfb0b2dcd8dee3264f38eec3c19e643b",
+    "files": [
+      {
+        "path": "data/test-00000-of-00001.parquet",
+        "role": "native_parquet",
+        "sha256": "f692a8f92d2a806d3b6861d0463bc5dab8cb6e11683d9684344d7b6659b38b0a"
+      },
+      {
+        "path": "data/train-00000-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "654fd05bc96f4fa0858d6dfc4951dbabc0a720e69e070cee7bcdf8d20abd08a3"
+      },
+      {
+        "path": "data/train-00001-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "c69fbc2497fab50b88b100b20a3c76a4dd45ebe9135d6b54c6b253cf5500734d"
+      },
+      {
+        "path": "data/train-00002-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "8b92b858658ea4a5b499ef2b80f73755e5fc8c8ea1b3a006d83c4ba729b09217"
+      },
+      {
+        "path": "data/train-00003-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "04af30f52c4f4e1ad5aca3bd0b6ac9cf11cdc1cf7765cdfe9a7b3b1662c517c2"
+      },
+      {
+        "path": "data/train-00004-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "051a28b41739cbb08ff3f4460ef12c35b9568f568a68fdd08688bc09cb4064c7"
+      },
+      {
+        "path": "data/train-00005-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "de092924eca8af9dffc34fd0f904f2e6d6c9e7bc40ec8ef5e1c06e326928f0dc"
+      },
+      {
+        "path": "data/train-00006-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "f762bf4cae67d78a2d82eb745882ed417d233ba9c243df59a1baa02deb0a0eb3"
+      },
+      {
+        "path": "data/train-00007-of-00008.parquet",
+        "role": "native_parquet",
+        "sha256": "e0210dec1c7601ce52f999a8de56a25375536cae65d3b99a248031d4fb57de68"
+      },
+      {
+        "path": "data/validation-00000-of-00001.parquet",
+        "role": "native_parquet",
+        "sha256": "cbaff41609cd41856306760e163bcb4356b23865c2149dd3f46d69022e944cca"
+      }
+    ]
+  },
+  "dataset": {
+    "images": 2510,
+    "annotations": 14286,
+    "keypoints": 24,
+    "keypoint_values_per_object": 72,
+    "splits": {
+      "train": 1996,
+      "validation": 257,
+      "test": 257
+    },
+    "source_receipt": "reports/provenance/synthetic/source.json",
+    "crosswalk": "reports/provenance/synthetic/crosswalk.jsonl",
+    "crosswalk_sha256": "840a9f538f95eed38889e2cdd4ab5ac97928d183a469bd57175ec980b92fcd0c",
+    "membership_report": "reports/provenance/synthetic/parquet-membership.json",
+    "membership_report_sha256": "7a92c744e3074a8cfd6c434f1e49819a1036ca5217943dd859ae201903946b77"
+  },
+  "evaluation": {
+    "status": "unavailable",
+    "label": "Dataset lineage verified; no independent held-out score for the released synthetic checkpoint",
+    "scope": "234 of 257 published test frames are in the released checkpoint training membership. The original model validation fold is 251 frames. Preserve both split definitions and use the exact crosswalk; never treat current Hub test as independent evaluation for this model.",
+    "training_membership_verified": true,
+    "metrics": []
+  },
+  "licenses": {
+    "code": {
+      "id": "MIT",
+      "path": "LICENSE"
+    },
+    "annotations": {
+      "declared": "MIT",
+      "scope": "author-created annotations"
+    },
+    "rendered_images": {
+      "declared": "MIT by author",
+      "upstream_content": "Epic City Sample; Epic Content License Agreement applies separately",
+      "source": "https://www.unrealengine.com/eula/content",
+      "scope": "No underlying Epic asset files redistributed. Author declaration does not relicense upstream City Sample assets."
+    }
+  }
+}

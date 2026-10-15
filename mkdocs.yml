@@ -74,6 +74,7 @@ nav:
   - Home: index.md
   - Showcase: showcase.md
   - How it works: pipeline.md
+  - Dataset lineage: DATASET_LINEAGE.md
   - Legal (EULA): legal/CITY_SAMPLE_EULA_REVIEW.md
   - API reference: api.md
 

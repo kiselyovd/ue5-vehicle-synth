@@ -12,9 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate pinned dataset lineage and generated summary
+        run: |
+          python scripts/validate_lineage.py
+          python scripts/artifact_manifest.py --check
       - uses: astral-sh/setup-uv@v3
-      - run: uv sync --all-groups
+      - run: uv sync --frozen --all-groups
       - name: Verify showcase production root and source data
-        run: uv run --all-groups python -m unittest discover -s tests -p test_showcase.py
+        run: uv run --frozen --all-groups python -m unittest discover -s tests -p test_showcase.py
 
-      - run: uv run --all-groups mkdocs gh-deploy --force
+      - run: uv run --frozen --all-groups mkdocs gh-deploy --force

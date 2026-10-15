@@ -29,6 +29,18 @@ Read the [experiment and error analysis](https://github.com/kiselyovd/vehicle-ke
 
 [Live vehicle detection](https://huggingface.co/spaces/kiselyovd/vehicle-keypoints-demo) is available separately: the Space runs the main 14-point real-data detector, not the synthetic-only 24-point model.
 
+## Published split provenance
+
+<!-- ARTIFACT-MANIFEST:START -->
+### Current artifact and evaluation
+
+Dataset lineage verified; no independent held-out score for the released synthetic checkpoint
+
+234 of 257 published test frames are in the released checkpoint training membership. The original model validation fold is 251 frames. Preserve both split definitions and use the exact crosswalk; never treat current Hub test as independent evaluation for this model.
+<!-- ARTIFACT-MANIFEST:END -->
+
+[Exact crosswalk and comparison protocol](docs/DATASET_LINEAGE.md).
+
 ## Why
 
 Real vehicle-keypoint data is scarce and expensive to label. A simulator provides projected annotations and controlled variation in viewpoints, lighting, and available vehicle assets. This project builds the generator as a reusable Unreal Engine C++ plugin (`UESynthCapture`) and uses it to extend `vehicle-keypoints` from a 14-point to a 24-point schema for controlled sim-to-real experiments.
@@ -76,7 +88,7 @@ The Unreal capture side requires UE 5.6 and the City Sample project; see the [Wi
 
 ## Legal
 
-Frames are rendered from Epic's City Sample. Under the Unreal Engine EULA, non-interactive media (images) rendered with the engine are freely distributable; only the underlying UE-Only-Content asset files are not. This dataset ships rendered PNG frames and JSON annotations only - never Epic asset files - so it stays within the license. Full analysis: [docs/legal/CITY_SAMPLE_EULA_REVIEW.md](docs/legal/CITY_SAMPLE_EULA_REVIEW.md).
+Frames incorporate Epic City Sample content. This dataset ships rendered PNGs and author-created annotations, with no source meshes/textures. Epic terms apply separately from the author code/annotation license; see [component terms and provenance](docs/DATASET_LINEAGE.md#separate-component-terms). The earlier [author review](docs/legal/CITY_SAMPLE_EULA_REVIEW.md) is historical interpretation.
 
 ## License
 
