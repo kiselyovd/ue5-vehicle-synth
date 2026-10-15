@@ -1,0 +1,16 @@
+{
+  "asset": "docs/images/social-preview.png",
+  "sha256": "b22c534d4986959ecac49ace10cdb0835ed411fc3fa72a714062be99d4fa486d",
+  "width": 1280,
+  "height": 640,
+  "bytes": 685898,
+  "kind": "project evidence composition; no generated model output",
+  "note": "Synthetic ground truth; UE / Epic component terms apply separately",
+  "sources": [
+    {
+      "path": "docs\\assets\\showcase\\stages\\geometry.png",
+      "sha256": "9e0a6e6a935e85f9bcaf14cedfd6c84c4b68337585ff9928033967d5cc20cc99"
+    }
+  ],
+  "renderer": "portfolio-integrity-2026-10-15/render_previews.py"
+}
