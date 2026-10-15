@@ -10,12 +10,12 @@ jobs:
   lint-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate pinned dataset lineage and generated summary
         run: |
           python scripts/validate_lineage.py
           python scripts/artifact_manifest.py --check
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Set up Python
@@ -37,7 +37,7 @@ jobs:
       - name: Pytest
         run: uv run --frozen --all-groups pytest
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -50,7 +50,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: coverage-xml
       - name: Generate shields endpoint JSON
@@ -106,7 +106,7 @@ jobs:
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run actionlint
         uses: reviewdog/action-actionlint@v1
         with:
