@@ -1,16 +1,51 @@
 {
+  "schema_version": 2,
   "asset": "docs/images/social-preview.png",
-  "sha256": "b22c534d4986959ecac49ace10cdb0835ed411fc3fa72a714062be99d4fa486d",
   "width": 1280,
   "height": 640,
-  "bytes": 685898,
-  "kind": "project evidence composition; no generated model output",
-  "note": "Synthetic ground truth; UE / Epic component terms apply separately",
-  "sources": [
+  "kind": "identity preview composed from a reviewed actual project figure",
+  "source": {
+    "repository": "kiselyovd/ue5-vehicle-synth",
+    "revision": "98b4697e8b48b376134ee5183f9e374f4c96f600",
+    "path": "docs/assets/showcase/stages/geometry.png",
+    "sha256": "9e0a6e6a935e85f9bcaf14cedfd6c84c4b68337585ff9928033967d5cc20cc99"
+  },
+  "source_figure_provenance": {
+    "asset": "docs/images/social-preview.png",
+    "sha256": "b22c534d4986959ecac49ace10cdb0835ed411fc3fa72a714062be99d4fa486d",
+    "width": 1280,
+    "height": 640,
+    "bytes": 685898,
+    "kind": "project evidence composition; no generated model output",
+    "note": "Synthetic ground truth; UE / Epic component terms apply separately",
+    "sources": [
+      {
+        "path": "docs\\assets\\showcase\\stages\\geometry.png",
+        "sha256": "9e0a6e6a935e85f9bcaf14cedfd6c84c4b68337585ff9928033967d5cc20cc99"
+      }
+    ],
+    "renderer": "portfolio-integrity-2026-10-15/render_previews.py"
+  },
+  "renderer": {
+    "repository": "kiselyovd/kiselyovd.github.io",
+    "revision": "7efec9a44382677b58cb657843446da104d8bf57",
+    "path": "automation/render_social_previews.py",
+    "sha256": "381021e708028e2bf42f0f97ab32d66df71747fdfced5fda3922bc06f805488b"
+  },
+  "outputs": [
     {
-      "path": "docs\\assets\\showcase\\stages\\geometry.png",
-      "sha256": "9e0a6e6a935e85f9bcaf14cedfd6c84c4b68337585ff9928033967d5cc20cc99"
+      "project": "ue5-vehicle-synth",
+      "theme": "dark",
+      "path": "docs/images/social-preview.png",
+      "sha256": "ef9a29981196ac211039334c80d944a948ef332e6d3fba70fe369d7934054f31",
+      "bytes": 343991
+    },
+    {
+      "project": "ue5-vehicle-synth",
+      "theme": "light",
+      "path": "docs/images/social-preview-light.png",
+      "sha256": "1fcedb881de27dbbe4ede67d6be6ab344f52a9dcb9ac15ec0c2d3e43a354a0e7",
+      "bytes": 345577
     }
-  ],
-  "renderer": "portfolio-integrity-2026-10-15/render_previews.py"
+  ]
 }
